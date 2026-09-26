@@ -152,7 +152,6 @@ function AppLoader({ label }: { label: string }) {
       </div>
       <strong>Dr. Bhushan’s Rejuvenation</strong>
       <span>{label}</span>
-      <div className="app-loader-bar"><span /></div>
     </div>
   </div>;
 }
