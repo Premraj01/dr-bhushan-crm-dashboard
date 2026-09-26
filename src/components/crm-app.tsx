@@ -161,13 +161,13 @@ function LoadingShowcase() { return <div className="loading-card" aria-label="Lo
 export function CRMApp() {
   const [view,setView]=useState<View>("Dashboard"); const [mobile,setMobile]=useState(false); const [dark,setDark]=useState(false);
   const [action,setAction]=useState<string|null>(null); const [profile,setProfile]=useState(false); const [notice,setNotice]=useState<string|null>(null); const [notifications,setNotifications]=useState(false); const [globalSearch,setGlobalSearch]=useState(""); const [loading,setLoading]=useState(false);
-  const [booting,setBooting]=useState(true); const [overlay,setOverlay]=useState<string|null>(null);
+  const [booting,setBooting]=useState(()=>typeof window!=="undefined"&&localStorage.getItem("drb-just-logged-in")==="1"); const [overlay,setOverlay]=useState<string|null>(null);
   useEffect(()=>{const isDark=localStorage.getItem("drb-theme")==="dark";setDark(isDark);document.documentElement.classList.toggle("dark",isDark)},[]);
-  useEffect(()=>{const justIn=consumeJustLoggedIn();const t=setTimeout(()=>setBooting(false),justIn?3000:1500);return ()=>clearTimeout(t)},[]);
+  useEffect(()=>{if(!booting)return;consumeJustLoggedIn();const t=setTimeout(()=>setBooting(false),3000);return ()=>clearTimeout(t)},[booting]);
   const nav=useNavigate();
-  const handleSignOut=()=>{mockSignOut();nav({to:"/auth",replace:true})};
+  const handleSignOut=()=>{setOverlay("Signing you out…");setTimeout(()=>{mockSignOut();nav({to:"/auth",replace:true})},2000)};
   const toggleTheme=()=>setDark(v=>{const next=!v;document.documentElement.classList.toggle("dark",next);localStorage.setItem("drb-theme",next?"dark":"light");return next});
-  const navigate=(label:View)=>{setLoading(true);setView(label);setMobile(false);setOverlay(`Loading ${label.toLowerCase()}…`);setTimeout(()=>{setLoading(false);setOverlay(null)},900)};
+  const navigate=(label:View)=>{setLoading(true);setView(label);setMobile(false);setTimeout(()=>setLoading(false),900)};
   const title = view;
   const content=useMemo(()=>{const show=(k:string)=>setAction(k); switch(view){case "Dashboard":return <Dashboard onBook={()=>show("Book appointment")} onPatient={()=>setProfile(true)}/>;case "Patients":return <PatientsView onAdd={()=>show("Add patient")} onSelect={()=>setProfile(true)}/>;case "Appointments":return <AppointmentsView onBook={()=>show("Book appointment")}/>;case "Leads":return <LeadsView onAdd={()=>show("Add enquiry")}/>;case "Treatments":return <TreatmentsView onAdd={()=>show("Record treatment")}/>;case "Billing":return <BillingView onAdd={()=>show("Create invoice")}/>;case "Reports":return <ReportsView onExport={()=>{setNotice("Report exported successfully.")}}/>;case "Settings":return <SettingsView onInvite={()=>show("Invite team member")}/>;}},[view]);
   return <div className="app-shell">
