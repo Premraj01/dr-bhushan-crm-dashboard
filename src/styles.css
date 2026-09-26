@@ -37,10 +37,7 @@ main{max-width:1540px;margin:0 auto;padding:29px 30px 42px}.page-header{display:
 .ring-progress{stroke:var(--primary);stroke-dasharray:84.8 254.5;stroke-dashoffset:0;animation:loader-ring 1.4s linear infinite;transform-origin:center}
 .app-loader-inner strong{font:700 15px var(--font-heading)}
 .app-loader-inner>span{color:var(--muted-foreground);font-size:11px}
-.app-loader-bar{position:relative;width:190px;height:5px;overflow:hidden;border-radius:99px;background:var(--border)}
-.app-loader-bar span{position:absolute;top:0;left:0;height:100%;width:40%;border-radius:99px;background:var(--primary);animation:loader-bar 1.2s ease-in-out infinite}
 @keyframes loader-ring{0%{stroke-dasharray:30 309.3;transform:rotate(0deg)}50%{stroke-dasharray:220 119.3;transform:rotate(180deg)}100%{stroke-dasharray:30 309.3;transform:rotate(360deg)}}
-@keyframes loader-bar{0%{left:-40%}100%{left:100%}}
 
 /* Split auth screen: form one side, doodle the other */
 .auth-shell{display:grid;min-height:100vh;grid-template-columns:minmax(0,1fr) minmax(0,1fr);background:var(--background)}
