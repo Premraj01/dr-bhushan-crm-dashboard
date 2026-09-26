@@ -138,6 +138,23 @@ function PatientModal({ open, onOpenChange }: { open:boolean; onOpenChange:(v:bo
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="patient-dialog"><DialogHeader><div className="profile-heading"><span>AD</span><div><DialogTitle>Ananya Deshmukh</DialogTitle><DialogDescription>PT-1084 · 32 years · +91 98230 78142</DialogDescription></div></div></DialogHeader><div className="profile-summary"><div><span>Primary concern</span><strong>Progressive hair thinning</strong></div><div><span>Current plan</span><strong>PRP · Session 3 of 6</strong></div><div><span>Next appointment</span><strong>17 Oct, 10:30 AM</strong></div></div><Banner tone="success">Treatment response is on track. Density improved by 14% from baseline.</Banner><div className="timeline"><h3>Treatment timeline</h3>{[["Today","PRP Session 3","Completed · No adverse reaction"],["29 Aug","PRP Session 2","Completed · Mild tenderness"],["01 Aug","PRP Session 1","Baseline photos captured"],["24 Jul","Consultation","Treatment plan approved"]].map(x=><div key={x[0]}><span>{x[0]}</span><i/><p><strong>{x[1]}</strong><small>{x[2]}</small></p></div>)}</div><DialogFooter><Button variant="outline" onClick={()=>onOpenChange(false)}>Close</Button><Button>Edit patient record</Button></DialogFooter></DialogContent></Dialog>;
 }
 
+function AppLoader({ label }: { label: string }) {
+  return <div className="app-loader" role="status" aria-label={label}>
+    <div className="app-loader-inner">
+      <div className="app-loader-logo">
+        <svg className="app-loader-ring" viewBox="0 0 120 120" aria-hidden="true">
+          <circle className="ring-track" cx="60" cy="60" r="54" />
+          <circle className="ring-progress" cx="60" cy="60" r="54" />
+        </svg>
+        <img src={logoMark} alt="" width={54} height={54} />
+      </div>
+      <strong>Dr. Bhushan’s Rejuvenation</strong>
+      <span>{label}</span>
+      <div className="app-loader-bar"><span /></div>
+    </div>
+  </div>;
+}
+
 function LoadingShowcase() { return <div className="loading-card" aria-label="Loading patient records"><div className="loading-title"><LoaderCircle className="animate-spin"/><span>Refreshing records…</span></div><div className="skeleton-row"><Skeleton className="size-10"/><div><Skeleton className="h-3 w-36"/><Skeleton className="mt-2 h-3 w-24"/></div><Skeleton className="ml-auto h-6 w-16"/></div></div>; }
 
 export function CRMApp() {
