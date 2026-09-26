@@ -1,5 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { CRMApp } from "@/components/crm-app";
+import { isAuthed } from "@/lib/mock-auth";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -12,5 +14,18 @@ export const Route = createFileRoute("/")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: CRMApp,
+  component: HomeRoute,
 });
+
+function HomeRoute() {
+  const navigate = useNavigate();
+  const [allowed, setAllowed] = useState(false);
+
+  useEffect(() => {
+    if (isAuthed()) setAllowed(true);
+    else navigate({ to: "/auth", replace: true });
+  }, [navigate]);
+
+  if (!allowed) return null;
+  return <CRMApp />;
+}
