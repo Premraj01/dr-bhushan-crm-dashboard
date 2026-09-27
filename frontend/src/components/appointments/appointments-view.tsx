@@ -11,6 +11,7 @@ import {
 } from "@/components/patients/patients-api";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatHours, hoursOn, useClinicTimings } from "@/lib/clinic-timings";
 import { cn } from "@/lib/utils";
 import {
   appointmentTone,
@@ -115,6 +116,7 @@ export function AppointmentsView({
   const overviewQuery = useAppointmentMonths(overviewMonths, isOverview);
   const activeQuery = isOverview ? overviewQuery : monthQuery;
   const { data, isPending, isError, refetch, isRefetching } = activeQuery;
+  const timings = useClinicTimings();
   const { data: packages } = usePackages(scheduling?.patientId ?? null);
   const pkg = packages?.find((p) => p.id === scheduling?.packageId);
 
@@ -160,6 +162,7 @@ export function AppointmentsView({
   const surgeryOn = (day: string) =>
     (byDay.get(day) ?? []).find(({ appointment: a }) => a.days !== undefined)?.appointment;
   const selectedSurgery = surgeryOn(selected);
+  const selectedHours = hoursOn(timings, selected);
   const rangeTitle = `${monthTitle(overviewMonths[0] ?? month)} – ${monthTitle(overviewMonths.at(-1) ?? month)}`;
 
   const renderMonthGrid = (gridMonth: string, compact = false) => {
@@ -168,13 +171,18 @@ export function AppointmentsView({
       <div className={cn("calendar-month", compact && "calendar-month-compact")} key={gridMonth}>
         {compact && <h3>{monthTitle(gridMonth)}</h3>}
         <div className="calendar-head" aria-hidden>
-          {WEEKDAYS.map((weekday, index) => <span key={index}>{weekday}</span>)}
+          {WEEKDAYS.map((weekday, index) => (
+            <span key={index}>{weekday}</span>
+          ))}
         </div>
         <div className="calendar-grid">
-          {Array.from({ length: grid.leading }, (_, index) => <span key={`blank-${index}`} />)}
+          {Array.from({ length: grid.leading }, (_, index) => (
+            <span key={`blank-${index}`} />
+          ))}
           {grid.days.map((day) => {
             const count = (byDay.get(day) ?? []).length;
             const surgery = surgeryOn(day);
+            const closed = !hoursOn(timings, day).open;
             return (
               <button
                 key={day}
@@ -183,9 +191,10 @@ export function AppointmentsView({
                   count > 0 && "has-event",
                   day === today && "today",
                   surgery && "surgery-day",
+                  closed && "closed-day",
                 )}
                 aria-pressed={day === selected}
-                aria-label={`${new Date(`${day}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "long" })}${surgery ? ", surgery day (theatre blocked, OPD open)" : ""}${count ? `, ${count} appointment${count > 1 ? "s" : ""}` : ""}`}
+                aria-label={`${new Date(`${day}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "long" })}${closed ? ", clinic closed" : ""}${surgery ? ", surgery day (theatre blocked, OPD open)" : ""}${count ? `, ${count} appointment${count > 1 ? "s" : ""}` : ""}`}
                 onClick={() => setSelected(day)}
               >
                 {Number(day.slice(8))}
@@ -247,7 +256,9 @@ export function AppointmentsView({
             6 months
           </Button>
         </div>
-        <span>{isOverview ? `${overviewCount}-month clinic schedule` : "Detailed monthly schedule"}</span>
+        <span>
+          {isOverview ? `${overviewCount}-month clinic schedule` : "Detailed monthly schedule"}
+        </span>
       </div>
       <div className="calendar-layout">
         <section className={cn("panel calendar-panel", isOverview && "six-month-calendar-panel")}>
@@ -264,7 +275,9 @@ export function AppointmentsView({
                   variant="outline"
                   size="icon"
                   aria-label={isOverview ? `Previous ${overviewCount} months` : "Previous month"}
-                  onClick={() => goTo(addMonths(`${month}-01`, isOverview ? -overviewCount : -1).slice(0, 7))}
+                  onClick={() =>
+                    goTo(addMonths(`${month}-01`, isOverview ? -overviewCount : -1).slice(0, 7))
+                  }
                 >
                   <ChevronLeft />
                 </Button>
@@ -272,7 +285,9 @@ export function AppointmentsView({
                   variant="outline"
                   size="icon"
                   aria-label={isOverview ? `Next ${overviewCount} months` : "Next month"}
-                  onClick={() => goTo(addMonths(`${month}-01`, isOverview ? overviewCount : 1).slice(0, 7))}
+                  onClick={() =>
+                    goTo(addMonths(`${month}-01`, isOverview ? overviewCount : 1).slice(0, 7))
+                  }
                 >
                   <ChevronRight />
                 </Button>
@@ -282,13 +297,16 @@ export function AppointmentsView({
           {isOverview ? (
             isPending ? (
               <div className="six-month-calendar-skeleton">
-                {overviewMonths.map((item) => <Skeleton className="h-56 w-full" key={item} />)}
+                {overviewMonths.map((item) => (
+                  <Skeleton className="h-56 w-full" key={item} />
+                ))}
               </div>
             ) : isError ? (
               <div className="table-error calendar-overview-error">
                 <Banner tone="error">Couldn’t load the {overviewCount}-month calendar.</Banner>
                 <Button variant="outline" onClick={() => void refetch()} disabled={isRefetching}>
-                  <RefreshCw className={isRefetching ? "animate-spin" : undefined} />Try again
+                  <RefreshCw className={isRefetching ? "animate-spin" : undefined} />
+                  Try again
                 </Button>
               </div>
             ) : (
@@ -296,7 +314,9 @@ export function AppointmentsView({
                 {overviewMonths.map((item) => renderMonthGrid(item, true))}
               </div>
             )
-          ) : renderMonthGrid(month)}
+          ) : (
+            renderMonthGrid(month)
+          )}
           <div className="calendar-key">
             <span>
               <i className="key-dot" />
@@ -314,6 +334,10 @@ export function AppointmentsView({
               <i className="key-surgery" />
               Surgery day · theatre blocked, OPD open
             </span>
+            <span>
+              <i className="key-closed" />
+              Clinic closed
+            </span>
           </div>
         </section>
 
@@ -323,49 +347,53 @@ export function AppointmentsView({
             subtitle={
               isPending
                 ? "Loading…"
-                : `${agenda.length} appointment${agenda.length === 1 ? "" : "s"}`
+                : `${formatHours(selectedHours)} · ${agenda.length} appointment${agenda.length === 1 ? "" : "s"}`
             }
           />
-          {!isPending && selected >= today && !selectedSurgery && onStartScheduling && (
-            <div className="day-surgery-picker">
-              <p>
-                <strong>Schedule surgery on {dayTitle(selected)}</strong>
-                <span>
-                  {awaitingSurgery.length
-                    ? "Patients whose surgery package isn’t booked yet."
-                    : "No patients are waiting for surgery. Create a package with a hair transplant first."}
-                </span>
-              </p>
-              {awaitingSurgery.length > 0 && pickedPackage && (
-                <div className="day-surgery-controls">
-                  <select
-                    aria-label="Patient awaiting surgery"
-                    value={pickedPackage.packageId}
-                    onChange={(e) => setSurgeryPick(e.target.value)}
-                  >
-                    {awaitingSurgery.map((p) => (
-                      <option key={p.packageId} value={p.packageId}>
-                        {p.patientName} · {p.packageId} · {p.surgery}
-                      </option>
-                    ))}
-                  </select>
-                  <Button
-                    onClick={() =>
-                      onStartScheduling({
-                        packageId: pickedPackage.packageId,
-                        patientId: pickedPackage.patientId,
-                        index: pickedPackage.stepIndex,
-                        date: selected,
-                      })
-                    }
-                  >
-                    <Scissors />
-                    Schedule surgery
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
+          {!isPending &&
+            selected >= today &&
+            selectedHours.open &&
+            !selectedSurgery &&
+            onStartScheduling && (
+              <div className="day-surgery-picker">
+                <p>
+                  <strong>Schedule surgery on {dayTitle(selected)}</strong>
+                  <span>
+                    {awaitingSurgery.length
+                      ? "Patients whose surgery package isn’t booked yet."
+                      : "No patients are waiting for surgery. Create a package with a hair transplant first."}
+                  </span>
+                </p>
+                {awaitingSurgery.length > 0 && pickedPackage && (
+                  <div className="day-surgery-controls">
+                    <select
+                      aria-label="Patient awaiting surgery"
+                      value={pickedPackage.packageId}
+                      onChange={(e) => setSurgeryPick(e.target.value)}
+                    >
+                      {awaitingSurgery.map((p) => (
+                        <option key={p.packageId} value={p.packageId}>
+                          {p.patientName} · {p.packageId} · {p.surgery}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      onClick={() =>
+                        onStartScheduling({
+                          packageId: pickedPackage.packageId,
+                          patientId: pickedPackage.patientId,
+                          index: pickedPackage.stepIndex,
+                          date: selected,
+                        })
+                      }
+                    >
+                      <Scissors />
+                      Schedule surgery
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
           {selectedSurgery && !isPending && (
             <div className="surgery-day-note">
               <Scissors />
@@ -405,8 +433,12 @@ export function AppointmentsView({
           ) : agenda.length === 0 ? (
             <div className="empty-state">
               <CalendarDays />
-              <h3>No appointments</h3>
-              <p>Nothing is booked for this day.</p>
+              <h3>{selectedHours.open ? "No appointments" : "Clinic closed"}</h3>
+              <p>
+                {selectedHours.open
+                  ? "Nothing is booked for this day."
+                  : "No appointments can be booked on this day. Change it in Settings → Clinic timings."}
+              </p>
             </div>
           ) : (
             <div className="agenda">

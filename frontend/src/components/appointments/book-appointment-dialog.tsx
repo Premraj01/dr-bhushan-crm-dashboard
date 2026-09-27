@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { api, ApiError } from "@/lib/api";
+import { formatTime, hoursOn, useClinicTimings } from "@/lib/clinic-timings";
 import { getSessionUser, initials } from "@/lib/mock-auth";
 import { cn } from "@/lib/utils";
 import {
@@ -274,6 +275,18 @@ function AppointmentForm({
     !locked &&
     (date !== clinicDateOf(appointment.startsAt) || time !== clinicTimeOf(appointment.startsAt));
 
+  // New and moved visits must fall within Settings → Clinic timings; untouched ones keep their slot.
+  const timings = useClinicTimings();
+  const dayHours = date ? hoursOn(timings, date) : null;
+  const hoursError =
+    !dayHours || !time || locked || (appointment && !reschedulingNow)
+      ? null
+      : !dayHours.open
+        ? `The clinic is closed on ${dayHours.day}s. Pick another date.`
+        : time < dayHours.opensAt || time >= dayHours.closesAt
+          ? `Pick a time between ${formatTime(dayHours.opensAt)} and ${formatTime(dayHours.closesAt)} (clinic hours on ${dayHours.day}s).`
+          : null;
+
   // A new visit for a treatment in the patient's plan takes that step (linked by the server).
   const chosenPatientId =
     choice?.kind === "existing"
@@ -381,7 +394,8 @@ function AppointmentForm({
     choice?.kind === "current" ||
     choice?.kind === "existing" ||
     (choice?.kind === "new" && newPatientValid && !duplicate);
-  const canSubmit = patientReady && !!date && !!time && !!chosenDoctor && !save.isPending;
+  const canSubmit =
+    patientReady && !!date && !!time && !hoursError && !!chosenDoctor && !save.isPending;
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -687,11 +701,14 @@ function AppointmentForm({
               required
               type="time"
               step={900}
+              {...(dayHours?.open && { min: dayHours.opensAt, max: dayHours.closesAt })}
+              aria-invalid={!!hoursError}
               disabled={locked}
               value={time}
               onChange={(e) => setTime(e.target.value)}
             />
           </label>
+          {hoursError && <p className="full field-error">{hoursError}</p>}
           {reschedulingNow && (
             <p className="full field-hint">
               Saving will mark this appointment <b>Rescheduled</b>.
