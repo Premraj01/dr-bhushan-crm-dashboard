@@ -2,3 +2,4 @@
 # The preview daemon must serve the frontend on port 8080.
 [run]
 dev = "npm run dev --prefix frontend -- --port 8080 --strictPort --host"
+build:dev = "npm run build --prefix frontend"
