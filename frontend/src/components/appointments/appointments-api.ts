@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, getToken } from "@/lib/api";
 import { getSocket } from "@/lib/socket";
 import type { Tone } from "@/components/crm-ui";
@@ -119,6 +119,36 @@ export function useAppointments(params: { month: string } | { date: string }) {
     return () => events.forEach((e) => socket.off(e, refresh));
   }, [queryClient, live]);
   return query;
+}
+
+/** Appointments across a fixed set of clinic-local months, for overview calendars. */
+export function useAppointmentMonths(months: string[], enabled = true) {
+  const queryClient = useQueryClient();
+  const queries = useQueries({
+    queries: months.map((month) => ({
+      queryKey: ["appointments", { month }],
+      queryFn: () => api<Appointment[]>(`/appointments?month=${month}`),
+      enabled,
+      retry: 1,
+    })),
+  });
+  const live = enabled && getToken() !== null;
+  useEffect(() => {
+    if (!live) return;
+    const refresh = () => void queryClient.invalidateQueries({ queryKey: ["appointments"] });
+    const socket = getSocket();
+    const events = ["appointment.created", "appointment.updated", "appointment.deleted"];
+    events.forEach((event) => socket.on(event, refresh));
+    return () => events.forEach((event) => socket.off(event, refresh));
+  }, [queryClient, live]);
+
+  return {
+    data: queries.flatMap((query) => query.data ?? []),
+    isPending: enabled && queries.some((query) => query.isPending),
+    isError: enabled && queries.some((query) => query.isError),
+    isRefetching: queries.some((query) => query.isRefetching),
+    refetch: () => Promise.all(queries.map((query) => query.refetch())),
+  };
 }
 
 /** Active doctors (and the lead-doctor admin) that sessions can be booked with. */
