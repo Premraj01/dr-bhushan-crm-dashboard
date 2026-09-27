@@ -16,6 +16,7 @@ import {
   appointmentTone,
   clinicDateOf,
   clinicTimeOf,
+  useAppointmentMonths,
   useAppointments,
   usePendingBookings,
   type Appointment,
@@ -54,6 +55,20 @@ function suggestedDate(pkg: TreatmentPackage, index: number): string {
 }
 
 type DayEntry = { appointment: Appointment; dayIndex: number };
+type CalendarView = "month" | "six-months";
+
+function monthDays(month: string) {
+  const [year, monthNumber] = month.split("-").map(Number) as [number, number];
+  const leading = new Date(Date.UTC(year, monthNumber - 1, 1)).getUTCDay();
+  const count = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  return {
+    leading,
+    days: Array.from(
+      { length: count },
+      (_, index) => `${month}-${String(index + 1).padStart(2, "0")}`,
+    ),
+  };
+}
 
 /** The step to book: the one asked for if it still needs a slot, else the package's next. */
 function stepToBook(pkg: TreatmentPackage, index?: number): number {
@@ -80,6 +95,7 @@ export function AppointmentsView({
   const today = clinicToday();
   const [month, setMonth] = useState(today.slice(0, 7));
   const [selected, setSelected] = useState(today);
+  const [calendarView, setCalendarView] = useState<CalendarView>("month");
   // null = closed, "new" = booking, a package session, or the appointment being edited.
   const [dialog, setDialog] = useState<
     "new" | { session: SessionToBook; date?: string | undefined } | Appointment | null
@@ -90,7 +106,13 @@ export function AppointmentsView({
   const [surgeryPick, setSurgeryPick] = useState("");
   const pickedPackage =
     awaitingSurgery.find((p) => p.packageId === surgeryPick) ?? awaitingSurgery[0];
-  const { data, isPending, isError, refetch, isRefetching } = useAppointments({ month });
+  const monthQuery = useAppointments({ month });
+  const overviewMonths = Array.from({ length: 6 }, (_, index) =>
+    addMonths(`${month}-01`, index).slice(0, 7),
+  );
+  const overviewQuery = useAppointmentMonths(overviewMonths, calendarView === "six-months");
+  const activeQuery = calendarView === "six-months" ? overviewQuery : monthQuery;
+  const { data, isPending, isError, refetch, isRefetching } = activeQuery;
   const { data: packages } = usePackages(scheduling?.patientId ?? null);
   const pkg = packages?.find((p) => p.id === scheduling?.packageId);
 
@@ -122,14 +144,6 @@ export function AppointmentsView({
       byDay.set(day, [...(byDay.get(day) ?? []), { appointment: a, dayIndex }]);
     }
   }
-  const [y, m] = month.split("-").map(Number) as [number, number];
-  const leading = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
-  const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  const days = Array.from(
-    { length: daysInMonth },
-    (_, i) => `${month}-${String(i + 1).padStart(2, "0")}`,
-  );
-
   const goTo = (next: string) => {
     setMonth(next);
     setSelected(next === today.slice(0, 7) ? today : `${next}-01`);
@@ -144,6 +158,43 @@ export function AppointmentsView({
   const surgeryOn = (day: string) =>
     (byDay.get(day) ?? []).find(({ appointment: a }) => a.days !== undefined)?.appointment;
   const selectedSurgery = surgeryOn(selected);
+  const rangeTitle = `${monthTitle(overviewMonths[0] ?? month)} – ${monthTitle(overviewMonths[5] ?? month)}`;
+
+  const renderMonthGrid = (gridMonth: string, compact = false) => {
+    const grid = monthDays(gridMonth);
+    return (
+      <div className={cn("calendar-month", compact && "calendar-month-compact")} key={gridMonth}>
+        {compact && <h3>{monthTitle(gridMonth)}</h3>}
+        <div className="calendar-head" aria-hidden>
+          {WEEKDAYS.map((weekday, index) => <span key={index}>{weekday}</span>)}
+        </div>
+        <div className="calendar-grid">
+          {Array.from({ length: grid.leading }, (_, index) => <span key={`blank-${index}`} />)}
+          {grid.days.map((day) => {
+            const count = (byDay.get(day) ?? []).length;
+            const surgery = surgeryOn(day);
+            return (
+              <button
+                key={day}
+                className={cn(
+                  day === selected && "selected",
+                  count > 0 && "has-event",
+                  day === today && "today",
+                  surgery && "surgery-day",
+                )}
+                aria-pressed={day === selected}
+                aria-label={`${new Date(`${day}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "long" })}${surgery ? ", surgery day (theatre blocked, OPD open)" : ""}${count ? `, ${count} appointment${count > 1 ? "s" : ""}` : ""}`}
+                onClick={() => setSelected(day)}
+              >
+                {Number(day.slice(8))}
+                {compact && count > 0 && <small>{count}</small>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <>
@@ -164,10 +215,34 @@ export function AppointmentsView({
           }
         />
       )}
+      <div className="calendar-viewbar" aria-label="Calendar view">
+        <div className="calendar-view-switch">
+          <Button
+            size="sm"
+            variant={calendarView === "month" ? "default" : "ghost"}
+            aria-pressed={calendarView === "month"}
+            onClick={() => {
+              setCalendarView("month");
+              setMonth(selected.slice(0, 7));
+            }}
+          >
+            Month
+          </Button>
+          <Button
+            size="sm"
+            variant={calendarView === "six-months" ? "default" : "ghost"}
+            aria-pressed={calendarView === "six-months"}
+            onClick={() => setCalendarView("six-months")}
+          >
+            6 months
+          </Button>
+        </div>
+        <span>{calendarView === "six-months" ? "Long-range clinic schedule" : "Detailed monthly schedule"}</span>
+      </div>
       <div className="calendar-layout">
-        <section className="panel calendar-panel">
+        <section className={cn("panel calendar-panel", calendarView === "six-months" && "six-month-calendar-panel")}>
           <SectionHeader
-            title={monthTitle(month)}
+            title={calendarView === "six-months" ? rangeTitle : monthTitle(month)}
             trailing={
               <div className="button-pair">
                 {month !== today.slice(0, 7) && (
@@ -178,52 +253,40 @@ export function AppointmentsView({
                 <Button
                   variant="outline"
                   size="icon"
-                  aria-label="Previous month"
-                  onClick={() => goTo(addMonths(`${month}-01`, -1).slice(0, 7))}
+                  aria-label={calendarView === "six-months" ? "Previous six months" : "Previous month"}
+                  onClick={() => goTo(addMonths(`${month}-01`, calendarView === "six-months" ? -6 : -1).slice(0, 7))}
                 >
                   <ChevronLeft />
                 </Button>
                 <Button
                   variant="outline"
                   size="icon"
-                  aria-label="Next month"
-                  onClick={() => goTo(addMonths(`${month}-01`, 1).slice(0, 7))}
+                  aria-label={calendarView === "six-months" ? "Next six months" : "Next month"}
+                  onClick={() => goTo(addMonths(`${month}-01`, calendarView === "six-months" ? 6 : 1).slice(0, 7))}
                 >
                   <ChevronRight />
                 </Button>
               </div>
             }
           />
-          <div className="calendar-head" aria-hidden>
-            {WEEKDAYS.map((d, i) => (
-              <span key={i}>{d}</span>
-            ))}
-          </div>
-          <div className="calendar-grid">
-            {Array.from({ length: leading }, (_, i) => (
-              <span key={`blank-${i}`} />
-            ))}
-            {days.map((day) => {
-              const count = (byDay.get(day) ?? []).length;
-              const surgery = surgeryOn(day);
-              return (
-                <button
-                  key={day}
-                  className={cn(
-                    day === selected && "selected",
-                    count > 0 && "has-event",
-                    day === today && "today",
-                    surgery && "surgery-day",
-                  )}
-                  aria-pressed={day === selected}
-                  aria-label={`${new Date(`${day}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "long" })}${surgery ? ", surgery day (theatre blocked, OPD open)" : ""}${count ? `, ${count} appointment${count > 1 ? "s" : ""}` : ""}`}
-                  onClick={() => setSelected(day)}
-                >
-                  {Number(day.slice(8))}
-                </button>
-              );
-            })}
-          </div>
+          {calendarView === "six-months" ? (
+            isPending ? (
+              <div className="six-month-calendar-skeleton">
+                {overviewMonths.map((item) => <Skeleton className="h-56 w-full" key={item} />)}
+              </div>
+            ) : isError ? (
+              <div className="table-error calendar-overview-error">
+                <Banner tone="error">Couldn’t load the six-month calendar.</Banner>
+                <Button variant="outline" onClick={() => void refetch()} disabled={isRefetching}>
+                  <RefreshCw className={isRefetching ? "animate-spin" : undefined} />Try again
+                </Button>
+              </div>
+            ) : (
+              <div className="six-month-calendar">
+                {overviewMonths.map((item) => renderMonthGrid(item, true))}
+              </div>
+            )
+          ) : renderMonthGrid(month)}
           <div className="calendar-key">
             <span>
               <i className="key-dot" />
