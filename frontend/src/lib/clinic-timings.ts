@@ -67,6 +67,69 @@ export function useClinicTimings(): DayTiming[] {
   return useSyncExternalStore(subscribe, read, () => DEFAULT_TIMINGS);
 }
 
+/**
+ * One-off closures on top of the weekly hours: a single day or a date range
+ * (holiday, renovation, doctor away). Stored in this browser like the timings.
+ */
+export type ClinicClosure = {
+  id: string;
+  /** YYYY-MM-DD, inclusive. */
+  from: string;
+  /** YYYY-MM-DD, inclusive. */
+  to: string;
+  reason: string;
+};
+
+const CLOSURES_KEY = "drb-clinic-closures";
+const CLOSURES_CHANGED = "drb-clinic-closures-changed";
+
+let closuresRaw: string | null | undefined;
+let closuresCached: ClinicClosure[] = [];
+
+function readClosures(): ClinicClosure[] {
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(CLOSURES_KEY);
+  } catch {
+    return [];
+  }
+  if (raw === closuresRaw) return closuresCached;
+  closuresRaw = raw;
+  try {
+    const parsed = raw ? (JSON.parse(raw) as ClinicClosure[]) : null;
+    closuresCached = Array.isArray(parsed)
+      ? parsed.filter((item) => item && item.from && item.to)
+      : [];
+  } catch {
+    closuresCached = [];
+  }
+  return closuresCached;
+}
+
+export function saveClinicClosures(closures: ClinicClosure[]) {
+  localStorage.setItem(CLOSURES_KEY, JSON.stringify(closures));
+  window.dispatchEvent(new Event(CLOSURES_CHANGED));
+}
+
+function subscribeClosures(onChange: () => void) {
+  window.addEventListener(CLOSURES_CHANGED, onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener(CLOSURES_CHANGED, onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+
+/** The saved closures, updating live when they change in Settings. */
+export function useClinicClosures(): ClinicClosure[] {
+  return useSyncExternalStore(subscribeClosures, readClosures, () => []);
+}
+
+/** True when a `YYYY-MM-DD` day falls inside a closure. */
+export function isClosedOn(closures: ClinicClosure[], date: string): boolean {
+  return closures.some((item) => item.from <= date && date <= item.to);
+}
+
 /** Hours for a `YYYY-MM-DD` day. */
 export function hoursOn(timings: DayTiming[], date: string): DayTiming {
   const sundayFirst = new Date(`${date}T00:00:00Z`).getUTCDay();

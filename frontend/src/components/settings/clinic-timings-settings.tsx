@@ -1,23 +1,48 @@
 import { useMemo, useState } from "react";
-import { CalendarClock, Save } from "lucide-react";
+import { CalendarClock, CalendarX2, Plus, Save, Trash2 } from "lucide-react";
 import { Banner, SectionHeader, StatusChip } from "@/components/crm-ui";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
   formatHours,
+  saveClinicClosures,
   saveClinicTimings,
+  useClinicClosures,
   useClinicTimings,
+  type ClinicClosure,
   type DayTiming,
 } from "@/lib/clinic-timings";
 
+/** "2026-10-02" → "2 Oct 2026". */
+function formatDate(value: string) {
+  return new Date(`${value}T00:00:00`).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function closureLabel(closure: ClinicClosure) {
+  return closure.from === closure.to
+    ? formatDate(closure.from)
+    : `${formatDate(closure.from)} – ${formatDate(closure.to)}`;
+}
+
 export function ClinicTimingsSettings({ onNotice }: { onNotice: (message: string) => void }) {
   const saved = useClinicTimings();
+  const savedClosures = useClinicClosures();
   const [timings, setTimings] = useState<DayTiming[]>(saved);
+  const [closures, setClosures] = useState<ClinicClosure[]>(savedClosures);
+  const [draft, setDraft] = useState({ from: "", to: "", reason: "" });
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
   const openDays = useMemo(() => timings.filter((item) => item.open), [timings]);
   const invalidDays = timings.filter(
     (item) => item.open && (!item.opensAt || !item.closesAt || item.closesAt <= item.opensAt),
+  );
+  const sortedClosures = useMemo(
+    () => [...closures].sort((a, b) => a.from.localeCompare(b.from)),
+    [closures],
   );
 
   const updateDay = (index: number, update: Partial<DayTiming>) => {
@@ -25,6 +50,34 @@ export function ClinicTimingsSettings({ onNotice }: { onNotice: (message: string
     setTimings((current) =>
       current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...update } : item)),
     );
+  };
+
+  const addClosure = () => {
+    if (!draft.from) {
+      setMessage({ tone: "error", text: "Pick the first closed day before adding a closure." });
+      return;
+    }
+    const to = draft.to || draft.from;
+    if (to < draft.from) {
+      setMessage({ tone: "error", text: "The last closed day can't be before the first one." });
+      return;
+    }
+    setMessage(null);
+    setClosures((current) => [
+      ...current,
+      {
+        id: `closure-${Date.now()}`,
+        from: draft.from,
+        to,
+        reason: draft.reason.trim() || "Clinic closed",
+      },
+    ]);
+    setDraft({ from: "", to: "", reason: "" });
+  };
+
+  const removeClosure = (id: string) => {
+    setMessage(null);
+    setClosures((current) => current.filter((item) => item.id !== id));
   };
 
   const save = () => {
@@ -36,6 +89,7 @@ export function ClinicTimingsSettings({ onNotice }: { onNotice: (message: string
       return;
     }
     saveClinicTimings(timings);
+    saveClinicClosures(closures);
     setMessage({ tone: "success", text: "Clinic timings saved successfully." });
     onNotice("Clinic timings saved successfully.");
   };
@@ -111,6 +165,76 @@ export function ClinicTimingsSettings({ onNotice }: { onNotice: (message: string
               </span>
             </div>
           ))}
+        </div>
+
+        <div className="clinic-timings-actions">
+          <div>
+            <strong>Closures &amp; holidays</strong>
+            <span>Close the clinic for a day or a stretch — a holiday, renovation, or leave.</span>
+          </div>
+        </div>
+
+        <div className="clinic-closures">
+          <div className="clinic-closure-form">
+            <label>
+              <span>From</span>
+              <input
+                type="date"
+                value={draft.from}
+                onChange={(event) => setDraft({ ...draft, from: event.target.value })}
+              />
+            </label>
+            <label>
+              <span>To</span>
+              <input
+                type="date"
+                value={draft.to}
+                min={draft.from || undefined}
+                onChange={(event) => setDraft({ ...draft, to: event.target.value })}
+              />
+            </label>
+            <label className="clinic-closure-reason">
+              <span>Reason</span>
+              <input
+                type="text"
+                placeholder="e.g. Diwali, doctor on leave"
+                value={draft.reason}
+                onChange={(event) => setDraft({ ...draft, reason: event.target.value })}
+              />
+            </label>
+            <Button type="button" variant="outline" onClick={addClosure}>
+              <Plus />
+              Add closure
+            </Button>
+          </div>
+
+          {sortedClosures.length ? (
+            <div className="clinic-closure-list" role="list" aria-label="Upcoming closures">
+              {sortedClosures.map((closure) => (
+                <div className="clinic-closure-row" role="listitem" key={closure.id}>
+                  <span className="clinic-closure-icon">
+                    <CalendarX2 />
+                  </span>
+                  <div className="clinic-closure-info">
+                    <strong>{closureLabel(closure)}</strong>
+                    <span>{closure.reason}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="clinic-closure-remove"
+                    onClick={() => removeClosure(closure.id)}
+                    aria-label={`Remove closure ${closureLabel(closure)}`}
+                  >
+                    <Trash2 />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="clinic-closure-empty">
+              No closures planned — the clinic follows the weekly schedule above.
+            </p>
+          )}
         </div>
 
         <div className="clinic-timings-footer">
