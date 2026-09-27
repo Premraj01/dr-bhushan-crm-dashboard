@@ -10,8 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 type Channel = "WhatsApp" | "SMS" | "Email";
-type SentReminder = { id: string; patientName: string; channel: Channel; message: string; sentAt: string; appointmentId?: string };
-type Draft = { patientId?: string; patientName: string; phone?: string; appointmentId?: string; message: string; channel: Channel };
+type SentReminder = { id: string; patientName: string; channel: Channel; message: string; sentAt: string; appointmentId?: string | undefined };
+type Draft = { patientId?: string | undefined; patientName: string; phone?: string | undefined; appointmentId?: string | undefined; message: string; channel: Channel };
 
 const KEY = "crm-sent-reminders";
 const channels: { label: Channel; icon: ComponentType<{ className?: string }> }[] = [
