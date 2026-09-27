@@ -20,8 +20,8 @@ const channels: { label: Channel; note: string; icon: ComponentType<{ className?
 ];
 function loadActivity(): ReminderActivity[] {
   try {
-    const saved = JSON.parse(localStorage.getItem(KEY) ?? "[]") as Array<ReminderActivity & { channel: string }>;
-    return saved.filter((item) => item.channel !== "Email").map((item) => ({ ...item, channel: item.channel as Channel }));
+    const saved = JSON.parse(localStorage.getItem(KEY) ?? "[]") as Array<Omit<ReminderActivity, "channel"> & { channel: string }>;
+    return saved.filter((item) => channels.some((channel) => channel.label === item.channel)).map((item) => ({ ...item, channel: item.channel as Channel }));
   } catch { return []; }
 }
 function clinicDate(iso: string) { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date(iso)); }

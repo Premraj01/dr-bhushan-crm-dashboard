@@ -28,6 +28,7 @@ import { EditPatientDialog, PatientProfileDialog, type EditTab } from "@/compone
 import { formatVisit, usePatients, type Patient } from "@/components/patients/patients-api";
 import { CatalogDialog, ConcernCatalogPanel, TreatmentCatalogPanel, type CatalogEditor } from "@/components/settings/catalog-settings";
 import { PlansSettingsPanel } from "@/components/plans/plans-settings";
+import { ClinicTimingsSettings } from "@/components/settings/clinic-timings-settings";
 import type { TreatmentPlan } from "@/components/plans/plans-api";
 import logoMark from "@/assets/logo-mark.png";
 import { useNavigate } from "@tanstack/react-router";
@@ -167,10 +168,10 @@ function ReportsView({ onExport }: { onExport: () => void }) {
   return <><PageHeader title="Reports" description="Revenue, treatment outcomes and clinic performance" action="Export report" onAction={onExport} /><div className="metrics-grid compact"><MetricCard label="Revenue YTD" value="₹82.6L" note="16.8%" icon={CircleDollarSign}/><MetricCard label="Patient retention" value="78%" note="4.1%" icon={Users}/><MetricCard label="PRP completion" value="84%" note="6.2%" icon={Activity}/><MetricCard label="Lead conversion" value="31%" note="2.8%" icon={BarChart3}/></div><div className="reports-grid"><section className="panel chart-panel"><SectionHeader title="Monthly revenue" subtitle="October 2025 – September 2026" trailing={<StatusChip tone="success">+16.8% YoY</StatusChip>} /><div className="bar-chart">{months.map((h,i)=><div key={i}><span style={{height:`${h}%`}} /><small>{["O","N","D","J","F","M","A","M","J","J","A","S"][i]}</small></div>)}</div></section><section className="panel"><SectionHeader title="Outcome quality" subtitle="Patient-reported at 6 months" /><div className="outcomes">{[["Excellent","62%"],["Good","28%"],["Moderate","8%"],["Needs review","2%"]].map(([l,v])=><div key={l}><div><span>{l}</span><strong>{v}</strong></div><div className="progress-track"><span className="progress-fill" style={{width:v}} /></div></div>)}</div></section></div></>;
 }
 
-type SettingsTab = "Team access" | "Treatments" | "Treatment plans" | "Concerns" | "Clinic profile" | "Notifications" | "Billing settings";
+type SettingsTab = "Team access" | "Treatments" | "Treatment plans" | "Concerns" | "Clinic profile" | "Clinic timings" | "Notifications" | "Billing settings";
 const settingsTabs: { label: SettingsTab; icon: Icon }[] = [
   { label: "Team access", icon: UserRound }, { label: "Treatments", icon: FlaskConical }, { label: "Treatment plans", icon: ListOrdered }, { label: "Concerns", icon: ClipboardList },
-  { label: "Clinic profile", icon: Settings }, { label: "Notifications", icon: Bell }, { label: "Billing settings", icon: CreditCard },
+  { label: "Clinic profile", icon: Settings }, { label: "Clinic timings", icon: Clock3 }, { label: "Notifications", icon: Bell }, { label: "Billing settings", icon: CreditCard },
 ];
 
 function SettingsView({ onInvite, onNotice, isAdmin }: { onInvite: () => void; onNotice: (message: string) => void; isAdmin: boolean }) {
@@ -187,6 +188,7 @@ function SettingsView({ onInvite, onNotice, isAdmin }: { onInvite: () => void; o
     : tab === "Treatments" ? <TreatmentCatalogPanel isAdmin={isAdmin} onNotice={onNotice} onEdit={(item) => setEditor({ kind: "treatments", item })} />
     : tab === "Treatment plans" ? <PlansSettingsPanel editing={planEditing} onEditingChange={setPlanEditing} onNotice={onNotice} />
     : tab === "Concerns" ? <ConcernCatalogPanel isAdmin={isAdmin} onNotice={onNotice} onEdit={(item) => setEditor({ kind: "concerns", item })} />
+    : tab === "Clinic timings" ? <ClinicTimingsSettings onNotice={onNotice} />
     : <section className="panel"><SectionHeader title={tab} /><div className="empty-state"><Settings /><h3>Coming soon</h3><p>{tab} will be configurable here.</p></div></section>;
   return <><PageHeader title="Settings" description="Clinic preferences, team access, treatments, plans and concerns" action={canAct ? header.action : undefined} onAction={header.onAction} /><div className="settings-layout"><nav className="settings-nav" aria-label="Settings sections">{settingsTabs.map(t => <button key={t.label} className={cn(tab === t.label && "active")} aria-current={tab === t.label ? "page" : undefined} onClick={() => setTab(t.label)}><t.icon />{t.label}</button>)}</nav>{panel}</div><CatalogDialog editor={editor} onOpenChange={(open) => !open && setEditor(null)} onNotice={onNotice} /></>;
 }
