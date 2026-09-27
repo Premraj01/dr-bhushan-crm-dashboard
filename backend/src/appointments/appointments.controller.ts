@@ -42,6 +42,25 @@ export class AppointmentsController {
     return this.appointments.update(id, dto);
   }
 
+  /** Tick in the day list: the patient has arrived. */
+  @Post(':id/check-in')
+  @HttpCode(200)
+  checkIn(@Param('id') id: string) {
+    return this.appointments.checkIn(id);
+  }
+
+  @Delete(':id/check-in')
+  undoCheckIn(@Param('id') id: string) {
+    return this.appointments.undoCheckIn(id);
+  }
+
+  /** "Mark completed" in the appointment details. */
+  @Post(':id/complete')
+  @HttpCode(200)
+  complete(@Param('id') id: string) {
+    return this.appointments.complete(id);
+  }
+
   @Delete(':id')
   @Roles('Admin')
   @HttpCode(204)

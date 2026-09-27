@@ -38,31 +38,70 @@ export class InvoicesService extends CrudService<Invoice> {
 
   create(dto: CreateInvoiceDto): Invoice {
     const patient = this.patients.findOne(dto.patientId);
+    const status = dto.status ?? 'Pending';
     const invoice = this.insert({
       ...dto,
       patientName: patient.name,
       issuedAt: clinicDate(),
-      status: dto.status ?? 'Pending',
+      paid: status === 'Paid' ? dto.amount : 0,
+      status,
     });
     if (invoice.status === 'Paid') this.notifyPaid(invoice);
     return invoice;
   }
 
   override update(id: string, dto: UpdateInvoiceDto): Invoice {
-    const wasPaid = this.findOne(id).status === 'Paid';
-    const invoice = super.update(id, dto);
+    const current = this.findOne(id);
+    const wasPaid = current.status === 'Paid';
+    const invoice = super.update(id, {
+      ...dto,
+      // Marking an invoice Paid by hand settles it in full.
+      ...(dto.status === 'Paid' && { paid: dto.amount ?? current.amount }),
+    });
     if (!wasPaid && invoice.status === 'Paid') this.notifyPaid(invoice);
     return invoice;
   }
 
+  /** Opens the invoice for a package or a stand-alone visit (see BillingService). */
+  open(data: {
+    patientId?: string;
+    patientName: string;
+    service: string;
+    amount: number;
+    packageId?: string;
+    appointmentId?: string;
+  }): Invoice {
+    return this.insert({
+      ...data,
+      issuedAt: clinicDate(),
+      paid: 0,
+      status: 'Pending',
+    });
+  }
+
+  /** Sets (or with null, removes) the invoice's EMI plan. */
+  setEmi(id: string, emi: Invoice['emi']): Invoice {
+    return super.update(id, { emi });
+  }
+
+  /** Adds a received payment to the invoice and settles its status. */
+  applyPayment(id: string, amount: number): Invoice {
+    const invoice = this.findOne(id);
+    const paid = invoice.paid + amount;
+    const status = paid >= invoice.amount ? 'Paid' : 'Partially paid';
+    const updated = super.update(id, { paid, status });
+    this.notifyPaid(updated, amount);
+    return updated;
+  }
+
   /** Drives the "Payment received" entry in the dashboard's notification bell. */
-  private notifyPaid(invoice: Invoice) {
+  private notifyPaid(invoice: Invoice, amount = invoice.amount) {
     const message: RealtimeMessage<ClinicNotification> = {
       event: 'notification',
       data: {
         tone: 'success',
         title: 'Payment received',
-        message: `${inr.format(invoice.amount)} from ${invoice.patientName}`,
+        message: `${inr.format(amount)} from ${invoice.patientName}`,
         at: new Date().toISOString(),
       },
     };

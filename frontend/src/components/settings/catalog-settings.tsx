@@ -9,6 +9,7 @@ import {
   Power,
   RefreshCw,
   Search,
+  Scissors,
   Trash2,
 } from "lucide-react";
 import { Banner, SectionHeader, StatusChip } from "@/components/crm-ui";
@@ -49,7 +50,7 @@ import { Switch } from "@/components/ui/switch";
 import { api, ApiError, getToken } from "@/lib/api";
 import { useSocketEvent } from "@/lib/socket";
 
-export const TREATMENT_CATEGORIES = ["PRP", "Transplant", "Consultation"] as const;
+export const TREATMENT_CATEGORIES = ["PRP", "Transplant", "Consultation", "Scalp therapy"] as const;
 export type TreatmentCategory = (typeof TREATMENT_CATEGORIES)[number];
 
 export type PricingUnit = "session" | "graft";
@@ -63,12 +64,12 @@ export type TreatmentOption = {
   /** Per `pricingUnit`, e.g. ₹20 per graft for FUE. */
   price: number;
   pricingUnit: PricingUnit;
-  /** PRP sessions given free with this treatment (e.g. 3 with a transplant). */
-  complimentaryPrpSessions?: number;
   /** Length in `durationUnit`; with `durationMax` it's a range, e.g. 1–2 days. */
   duration: number;
   durationMax?: number | null;
   durationUnit: DurationUnit;
+  /** Surgery: scheduled from the package via Pending bookings (1–3 days, blocks the theatre). */
+  surgical?: boolean;
   description?: string;
   active: boolean;
 };
@@ -122,10 +123,10 @@ export function useCatalog<T extends CatalogItem>(resource: Resource) {
   });
 
   // Keep every open Settings screen in sync when anyone changes the catalog.
-  const refresh = useCallback(
-    () => void queryClient.invalidateQueries({ queryKey: ["catalog", resource] }),
-    [queryClient, resource],
-  );
+  const refresh = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ["catalog", resource] });
+    void queryClient.invalidateQueries({ queryKey: ["quote"] });
+  }, [queryClient, resource]);
   const live = getToken() !== null;
   const { event } = RESOURCE_COPY[resource];
   useSocketEvent(`${event}.created`, refresh, live);
@@ -137,7 +138,11 @@ export function useCatalog<T extends CatalogItem>(resource: Resource) {
 
 function useCatalogMutations<T extends CatalogItem>(resource: Resource) {
   const queryClient = useQueryClient();
-  const onSuccess = () => queryClient.invalidateQueries({ queryKey: ["catalog", resource] });
+  const onSuccess = () => {
+    void queryClient.invalidateQueries({ queryKey: ["catalog", resource] });
+    // Plan previews are priced from the catalog.
+    void queryClient.invalidateQueries({ queryKey: ["quote"] });
+  };
 
   const save = useMutation({
     mutationFn: ({ id, body }: { id?: string | undefined; body: Partial<Omit<T, "id">> }) =>
@@ -180,11 +185,11 @@ export function TreatmentCatalogPanel(props: PanelProps<TreatmentOption>) {
               ? `${t.sessions} session${t.sessions > 1 ? "s" : ""}`
               : null,
           formatDuration(t),
-          t.complimentaryPrpSessions ? `incl. ${t.complimentaryPrpSessions} free PRP` : null,
         ]
           .filter(Boolean)
           .join(" · ")
       }
+      badge={(t) => t.surgical && <SurgicalTag />}
       trailing={(t) => (
         <span className="catalog-price">
           {inr.format(t.price)}
@@ -192,6 +197,20 @@ export function TreatmentCatalogPanel(props: PanelProps<TreatmentOption>) {
         </span>
       )}
     />
+  );
+}
+
+/** Marks a treatment tagged surgical in Settings (an icon; the label is for tooltips and screen readers). */
+export function SurgicalTag() {
+  return (
+    <span
+      className="surgical-tag"
+      role="img"
+      aria-label="Surgical"
+      title="Surgical — scheduled via Pending bookings"
+    >
+      <Scissors aria-hidden />
+    </span>
   );
 }
 
@@ -230,6 +249,7 @@ function CatalogPanel<T extends CatalogItem>({
   meta,
   trailing,
   card,
+  badge,
   isAdmin,
   onEdit,
   onNotice,
@@ -241,6 +261,8 @@ function CatalogPanel<T extends CatalogItem>({
   emptyHint: string;
   meta: (item: T) => string;
   trailing?: (item: T) => ReactNode;
+  /** Shown right after the name, e.g. the surgical icon. */
+  badge?: (item: T) => ReactNode;
   /** Render items that belong to a group as illustrated cards instead of list rows. */
   card?: {
     group: (item: T) => string | null;
@@ -420,7 +442,10 @@ function CatalogPanel<T extends CatalogItem>({
                         <Icon />
                       </span>
                       <div className="min-w-0">
-                        <strong>{item.name}</strong>
+                        <strong className="catalog-name">
+                          {item.name}
+                          {badge?.(item)}
+                        </strong>
                         <small>{meta(item)}</small>
                       </div>
                       {trailing?.(item)}
@@ -539,9 +564,6 @@ function TreatmentForm({ item, onDone, onCancel }: FormProps<TreatmentOption>) {
   const [category, setCategory] = useState<TreatmentCategory>(item?.category ?? "PRP");
   const [price, setPrice] = useState(item ? String(item.price) : "");
   const [pricingUnit, setPricingUnit] = useState<PricingUnit>(item?.pricingUnit ?? "session");
-  const [freePrp, setFreePrp] = useState(
-    item?.complimentaryPrpSessions ? String(item.complimentaryPrpSessions) : "0",
-  );
   const [sessions, setSessions] = useState(item?.sessions ? String(item.sessions) : "1");
   const [duration, setDuration] = useState(item ? String(item.duration) : "45");
   const [durationMax, setDurationMax] = useState(item?.durationMax ? String(item.durationMax) : "");
@@ -549,6 +571,7 @@ function TreatmentForm({ item, onDone, onCancel }: FormProps<TreatmentOption>) {
   const rangeInvalid = durationMax !== "" && Number(durationMax) <= Number(duration);
   const [description, setDescription] = useState(item?.description ?? "");
   const [active, setActive] = useState(item?.active ?? true);
+  const [surgical, setSurgical] = useState(item?.surgical ?? false);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -561,12 +584,12 @@ function TreatmentForm({ item, onDone, onCancel }: FormProps<TreatmentOption>) {
           category,
           price: Number(price),
           pricingUnit,
-          complimentaryPrpSessions: category === "Transplant" ? Number(freePrp || 0) : 0,
           ...(sessions && { sessions: Number(sessions) }),
           duration: Number(duration),
           // null clears a previous range when the "up to" field is emptied.
           durationMax: durationMax ? Number(durationMax) : null,
           durationUnit,
+          surgical,
           ...(description.trim() && { description: description.trim() }),
           active,
         },
@@ -681,20 +704,6 @@ function TreatmentForm({ item, onDone, onCancel }: FormProps<TreatmentOption>) {
         </label>
         {rangeInvalid && <p className="field-hint">“Up to” must be more than “From”.</p>}
       </fieldset>
-      {category === "Transplant" && (
-        <label>
-          Free PRP sessions included
-          <input
-            type="number"
-            inputMode="numeric"
-            min={0}
-            max={12}
-            step={1}
-            value={freePrp}
-            onChange={(e) => setFreePrp(e.target.value)}
-          />
-        </label>
-      )}
       <label className="full">
         Description
         <textarea
@@ -704,6 +713,16 @@ function TreatmentForm({ item, onDone, onCancel }: FormProps<TreatmentOption>) {
           placeholder="Optional — what’s included, graft limits, etc."
         />
       </label>
+      <div className="full form-switch">
+        <div>
+          <strong>Surgical procedure</strong>
+          <small>
+            Scheduled from the package via Pending bookings, takes 1–3 days and blocks the theatre.
+            Other treatments are booked as normal visits.
+          </small>
+        </div>
+        <Switch checked={surgical} onCheckedChange={setSurgical} aria-label="Surgical procedure" />
+      </div>
       <ActiveSwitch checked={active} onChange={setActive} />
     </CatalogFormShell>
   );

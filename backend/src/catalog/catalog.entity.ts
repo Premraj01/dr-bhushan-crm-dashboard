@@ -15,12 +15,15 @@ export interface TreatmentOption extends Entity {
   /** INR, whole rupees, per `pricingUnit` (e.g. ₹20 per graft for FUE). */
   price: number;
   pricingUnit: PricingUnit;
-  /** PRP sessions given free with this treatment (e.g. 3 with a transplant). */
-  complimentaryPrpSessions?: number;
   /** How long it takes, e.g. 45 minutes or 1–2 days (`durationMax` for a range). */
   duration: number;
   durationMax?: number | null;
   durationUnit: DurationUnit;
+  /**
+   * Surgery: booked from the package into a theatre slot (1–3 days, one surgery a day),
+   * via Pending bookings. Other treatments are booked as normal visits.
+   */
+  surgical?: boolean;
   description?: string;
   active: boolean;
 }

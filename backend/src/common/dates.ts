@@ -63,3 +63,20 @@ export function clinicDateTimeToIso(date: string, time: string): string {
   const guess = Date.UTC(y, m - 1, d, hh, mm);
   return new Date(guess - zoneOffsetMs(guess, clinicTimeZone())).toISOString();
 }
+
+/** YYYY-MM-DD plus `days` calendar days. */
+export function addDays(date: string, days: number): string {
+  const t = new Date(`${date}T00:00:00Z`);
+  t.setUTCDate(t.getUTCDate() + days);
+  return t.toISOString().slice(0, 10);
+}
+
+/** Clinic wall-clock time ("09:30") of an instant. */
+export function clinicTime(value: string | Date): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: clinicTimeZone(),
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(new Date(value));
+}

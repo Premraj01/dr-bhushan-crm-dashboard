@@ -1,7 +1,13 @@
 import { IsIn } from 'class-validator';
-import { PACKAGE_STATUSES, type PackageStatus } from '../package.entity';
+import { type PackageStatus } from '../package.entity';
+
+/** Packages start Accepted; afterwards they can only be completed or cancelled. */
+const STATUS_CHANGES = [
+  'Completed',
+  'Cancelled',
+] as const satisfies readonly PackageStatus[];
 
 export class UpdatePackageDto {
-  @IsIn(PACKAGE_STATUSES)
-  status: PackageStatus;
+  @IsIn(STATUS_CHANGES)
+  status: (typeof STATUS_CHANGES)[number];
 }

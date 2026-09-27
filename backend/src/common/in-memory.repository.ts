@@ -15,7 +15,12 @@ export class InMemoryRepository<T extends Entity> {
   ) {
     const now = new Date().toISOString();
     for (const item of seed) {
-      this.items.set(item.id, { ...item, createdAt: now, updatedAt: now } as T);
+      const createdAt = item.createdAt ?? now;
+      this.items.set(item.id, {
+        ...item,
+        createdAt,
+        updatedAt: createdAt,
+      } as T);
       const n = Number(item.id.slice(idPrefix.length));
       if (Number.isFinite(n)) this.sequence = Math.max(this.sequence, n);
     }

@@ -8,4 +8,10 @@ export interface Entity {
 export type NewEntity<T extends Entity> = Omit<T, keyof Entity>;
 
 /** Seed records carry fixed ids so they match the data the frontend was prototyped with. */
-export type SeedEntity<T extends Entity> = Omit<T, 'createdAt' | 'updatedAt'>;
+export type SeedEntity<T extends Entity> = Omit<
+  T,
+  'createdAt' | 'updatedAt'
+> & {
+  /** Defaults to server start; set it when the record's age matters (e.g. registrations). */
+  createdAt?: string;
+};

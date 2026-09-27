@@ -1,10 +1,22 @@
 import { Injectable } from '@nestjs/common';
+import { Appointment } from '../appointments/appointment.entity';
 import { AppointmentsService } from '../appointments/appointments.service';
-import { clinicDate, clinicMonth } from '../common/dates';
+import { addMonths, clinicDate, clinicMonth } from '../common/dates';
 import { InvoicesService } from '../invoices/invoices.service';
+import { PaymentsService } from '../invoices/payments.service';
 import { LeadsService } from '../leads/leads.service';
 import { PatientsService } from '../patients/patients.service';
-import { TreatmentsService } from '../treatments/treatments.service';
+
+type TreatmentKind = 'prp' | 'transplant' | 'consultation' | 'other';
+
+/** Groups an appointment by what was done, from its type (and `days` for surgery). */
+function kindOf(a: Appointment): TreatmentKind {
+  const type = a.type.toLowerCase();
+  if (a.days !== undefined || /transplant|fue/.test(type)) return 'transplant';
+  if (type.includes('prp')) return 'prp';
+  if (/consult|analysis|review|follow/.test(type)) return 'consultation';
+  return 'other';
+}
 
 @Injectable()
 export class DashboardService {
@@ -12,53 +24,77 @@ export class DashboardService {
     private readonly patients: PatientsService,
     private readonly appointments: AppointmentsService,
     private readonly leads: LeadsService,
-    private readonly treatments: TreatmentsService,
     private readonly invoices: InvoicesService,
+    private readonly payments: PaymentsService,
   ) {}
 
-  /** Headline metrics for the Dashboard view, computed for the current clinic day/month. */
+  /** Dashboard figures for the current clinic day and month — all from live records. */
   summary() {
-    const today = this.appointments.list({ date: clinicDate() });
+    const today = clinicDate();
     const month = clinicMonth();
-    const invoices = this.invoices.findAll();
-    const treatments = this.treatments.findAll();
-    const monthTreatments = treatments.filter((t) =>
-      t.lastSessionAt.startsWith(month),
-    );
+    const lastMonth = addMonths(`${month}-01`, -1).slice(0, 7);
+
+    const patients = this.patients.findAll();
+    const todays = this.appointments.list({ date: today });
+    const monthVisits = this.appointments
+      .list({ month })
+      // Count a multi-day surgery once, in the month it starts.
+      .filter((a) => clinicMonth(a.startsAt) === month);
+    const prp = monthVisits.filter((a) => kindOf(a) === 'prp');
+
+    const payments = this.payments.findAll();
+    const receivedIn = (period: string) =>
+      payments
+        .filter((p) => clinicDate(p.receivedAt).startsWith(period))
+        .reduce((total, p) => total + p.amount, 0);
+    const invoices = this.invoices
+      .findAll()
+      .filter((i) => i.status !== 'Cancelled');
+
+    const mix: Record<TreatmentKind, number> = {
+      prp: 0,
+      transplant: 0,
+      consultation: 0,
+      other: 0,
+    };
+    for (const a of monthVisits) mix[kindOf(a)]++;
 
     return {
-      totalPatients: this.patients.findAll().length,
-      appointmentsToday: today.length,
-      pendingAppointmentsToday: today.filter((a) => a.status === 'Scheduled')
-        .length,
-      revenueThisMonth: sum(
-        invoices.filter(
-          (i) => i.status === 'Paid' && i.issuedAt.startsWith(month),
+      today,
+      month,
+      patients: {
+        total: patients.length,
+        newThisMonth: patients.filter((p) => clinicMonth(p.createdAt) === month)
+          .length,
+      },
+      appointmentsToday: {
+        total: todays.length,
+        scheduled: todays.filter(
+          (a) => a.status === 'Scheduled' || a.status === 'Rescheduled',
+        ).length,
+        checkedIn: todays.filter((a) => a.status === 'Checked in').length,
+        completed: todays.filter((a) => a.status === 'Completed').length,
+      },
+      revenue: {
+        thisMonth: receivedIn(month),
+        lastMonth: receivedIn(lastMonth),
+        today: receivedIn(today),
+        billedThisMonth: invoices
+          .filter((i) => i.issuedAt.startsWith(month))
+          .reduce((total, i) => total + i.amount, 0),
+        outstanding: invoices.reduce(
+          (total, i) => total + Math.max(0, i.amount - i.paid),
+          0,
         ),
-      ),
-      outstanding: sum(
-        invoices.filter(
-          (i) => i.status === 'Pending' || i.status === 'Overdue',
-        ),
-      ),
-      activePrpPlans: treatments.filter(
-        (t) => t.type === 'PRP' && t.status === 'Active',
-      ).length,
-      reviewsDue: treatments.filter((t) => t.status === 'Review due').length,
+      },
+      prpSessions: {
+        thisMonth: prp.length,
+        completed: prp.filter((a) => a.status === 'Completed').length,
+      },
+      treatmentMix: { total: monthVisits.length, ...mix },
       openLeads: this.leads
         .findAll()
         .filter((l) => l.stage !== 'Converted' && l.stage !== 'Lost').length,
-      treatmentMix: {
-        PRP: monthTreatments.filter((t) => t.type === 'PRP').length,
-        Transplant: monthTreatments.filter((t) => t.type === 'Transplant')
-          .length,
-        Consultation: monthTreatments.filter((t) => t.type === 'Consultation')
-          .length,
-      },
     };
   }
-}
-
-function sum(invoices: { amount: number }[]) {
-  return invoices.reduce((total, i) => total + i.amount, 0);
 }

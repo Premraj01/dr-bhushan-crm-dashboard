@@ -46,13 +46,6 @@ export class CreateTreatmentOptionDto {
   @IsIn(PRICING_UNITS)
   pricingUnit?: PricingUnit;
 
-  /** PRP sessions included free, e.g. 3 with a hair transplant. */
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(12)
-  complimentaryPrpSessions?: number;
-
   /** Length in `durationUnit`; the lower bound when `durationMax` is set. */
   @IsInt()
   @Min(1)
@@ -68,6 +61,11 @@ export class CreateTreatmentOptionDto {
 
   @IsIn(DURATION_UNITS)
   durationUnit: DurationUnit;
+
+  /** Surgery: scheduled from the package into a theatre slot. */
+  @IsOptional()
+  @IsBoolean()
+  surgical?: boolean;
 
   @IsOptional()
   @IsString()

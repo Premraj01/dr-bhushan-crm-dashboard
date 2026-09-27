@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, getToken } from "@/lib/api";
 import { getSocket } from "@/lib/socket";
-import type { TreatmentOption } from "@/components/settings/catalog-settings";
+import type { PackageRequest, PlanItem, PriceLine, StepView } from "@/components/plans/plans-api";
 
 export type Patient = {
   id: string;
@@ -19,59 +19,56 @@ export type Patient = {
   notes?: string;
 };
 
-export type PackageStatus = "Proposed" | "Accepted" | "Completed" | "Cancelled";
+/** Accepted as soon as it's created. */
+export type PackageStatus = "Accepted" | "Completed" | "Cancelled";
 
-export type PackageLine = {
-  treatmentOptionId: string;
-  description: string;
-  unit: "session" | "graft";
-  quantity: number;
-  unitPrice: number;
-  amount: number;
-  complimentary: boolean;
-};
+export type PackageLine = PriceLine & { treatmentOptionId: string };
 
-export type StepKind = "prp" | "transplant" | "prp-free";
-
-export type PackageStep = {
-  kind: StepKind;
-  description: string;
-  /** YYYY-MM-DD */
-  date: string;
-  complimentary: boolean;
-  appointmentId?: string;
-};
-
+/** A treatment plan applied to a patient: priced steps with live state and due dates. */
 export type TreatmentPackage = {
   id: string;
   patientId: string;
-  lines: PackageLine[];
-  prpSessions: number;
-  grafts?: number;
-  total: number;
+  patientName: string;
+  /** The plan's name, or "Custom plan". */
+  name: string;
+  planId?: string;
+  /** YYYY-MM-DD the first visit is due. */
   startDate: string;
-  intervalMonths: number;
-  /** HH:mm the sessions are booked at in the calendar. */
-  sessionTime: string;
-  doctor: string;
-  schedule: PackageStep[];
+  items: PlanItem[];
+  steps: StepView[];
+  lines: PackageLine[];
+  total: number;
   status: PackageStatus;
   notes?: string;
   createdBy: { id: string; name: string; role: string };
   createdAt: string;
+  progress: { done: number; total: number };
+  /** First step still needing a slot (never booked, or missed); null when none. */
+  next: number | null;
 };
 
-export type PackageRequest = {
-  prpSessions?: number;
-  transplant?: { grafts: number; pricePerGraft?: number };
-  /** YYYY-MM-DD of the first session. */
-  startDate?: string;
-  intervalMonths?: number;
-  sequence?: StepKind[];
-  sessionTime?: string;
-  doctor?: string;
-  notes?: string;
-};
+/**
+ * The step a new booking of `treatment` will take (mirrors the server): the first step of
+ * that treatment still needing a slot, oldest package first.
+ */
+export function stepForBooking(
+  pkgs: TreatmentPackage[],
+  treatment: string,
+): { pkg: TreatmentPackage; step: StepView } | null {
+  const type = treatment.trim().toLowerCase();
+  for (const pkg of [...pkgs]
+    .filter((p) => p.status === "Accepted")
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
+    const step = pkg.steps.find(
+      (s) =>
+        (s.state === "to-book" || s.state === "missed") &&
+        (s.description.toLowerCase() === type ||
+          s.description.split(" · ")[0]!.toLowerCase() === type),
+    );
+    if (step) return { pkg, step };
+  }
+  return null;
+}
 
 /** Refetch `queryKey` whenever any of `events` arrives over the websocket. */
 function useLiveInvalidate(queryKey: readonly unknown[], events: readonly string[]) {
@@ -145,70 +142,40 @@ export function useCreatePackage(patientId: string) {
 export function useSetPackageStatus(patientId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, status }: { id: string; status: PackageStatus }) =>
+    mutationFn: ({ id, status }: { id: string; status: Exclude<PackageStatus, "Accepted"> }) =>
       api<TreatmentPackage>(`/packages/${id}`, {
         method: "PATCH",
         body: JSON.stringify({ status }),
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["packages", patientId] });
-      // Accepting/cancelling confirms/cancels the booked sessions.
+      // Cancelling removes the package's upcoming sessions from the calendar.
       void queryClient.invalidateQueries({ queryKey: ["appointments"] });
     },
   });
 }
 
-/**
- * Live price preview. Mirrors the backend's PackagesService.quote(); the server
- * recalculates on save, so this is display-only.
- */
-export function previewPackage(
-  request: PackageRequest,
-  prp: TreatmentOption | undefined,
-  fue: TreatmentOption | undefined,
-) {
-  const lines: Omit<PackageLine, "treatmentOptionId">[] = [];
-  const paid = request.prpSessions ?? 0;
-  let free = 0;
-  if (paid > 0 && prp) {
-    lines.push({
-      description: prp.name,
-      unit: "session",
-      quantity: paid,
-      unitPrice: prp.price,
-      amount: paid * prp.price,
-      complimentary: false,
-    });
-  }
-  if (request.transplant && fue) {
-    const unitPrice = request.transplant.pricePerGraft ?? fue.price;
-    const grafts = request.transplant.grafts;
-    lines.push({
-      description: `${fue.name} · ${grafts.toLocaleString("en-IN")} grafts`,
-      unit: "graft",
-      quantity: grafts,
-      unitPrice,
-      amount: grafts * unitPrice,
-      complimentary: false,
-    });
-    free = fue.complimentaryPrpSessions ?? 0;
-    if (free > 0 && prp) {
-      lines.push({
-        description: `${prp.name} · complimentary with transplant`,
-        unit: "session",
-        quantity: free,
-        unitPrice: prp.price,
-        amount: 0,
-        complimentary: true,
-      });
-    }
-  }
-  return {
-    lines,
-    paidPrp: paid,
-    freePrp: free,
-    total: lines.reduce((sum, l) => sum + l.amount, 0),
-  };
+export type BookSessionRequest = {
+  startsAt: string;
+  doctor: string;
+  days?: number;
+  notes?: string;
+};
+
+/** Books one package session into the appointment calendar. */
+export function useBookSession(pkg: Pick<TreatmentPackage, "id" | "patientId">) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ index, ...body }: BookSessionRequest & { index: number }) =>
+      api<TreatmentPackage>(`/packages/${pkg.id}/sessions/${index}/appointment`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["packages", pkg.patientId] });
+      void queryClient.invalidateQueries({ queryKey: ["appointments"] });
+    },
+  });
 }
 
 export function formatVisit(date: string | undefined): string {
@@ -243,60 +210,6 @@ export function addDays(date: string, days: number): string {
   const t = new Date(`${date}T00:00:00Z`);
   t.setUTCDate(t.getUTCDate() + days);
   return t.toISOString().slice(0, 10);
-}
-
-export type StepCounts = Record<StepKind, number>;
-
-/** Default order: transplant, its complimentary PRP, then paid PRP. */
-export function defaultSequence(counts: StepCounts): StepKind[] {
-  return (["transplant", "prp-free", "prp"] as const).flatMap((k) =>
-    Array<StepKind>(counts[k]).fill(k),
-  );
-}
-
-/**
- * Keeps the user's arrangement when quantities change: surplus steps are dropped
- * from the end of their kind, new ones are added where the default order puts them.
- */
-export function reconcileSequence(current: StepKind[], counts: StepCounts): StepKind[] {
-  const seen: Partial<Record<StepKind, number>> = {};
-  const kept = current.filter((k) => (seen[k] = (seen[k] ?? 0) + 1) <= counts[k]);
-  const missing = (k: StepKind) => counts[k] - kept.filter((x) => x === k).length;
-  const result = [...kept];
-  if (missing("transplant") > 0) result.unshift("transplant");
-  if (missing("prp-free") > 0) {
-    // After the transplant (or at the start) — that's when complimentary PRP happens.
-    const at = result.indexOf("transplant") + 1;
-    result.splice(at, 0, ...Array<StepKind>(missing("prp-free")).fill("prp-free"));
-  }
-  if (missing("prp") > 0) result.push(...Array<StepKind>(missing("prp")).fill("prp"));
-  return result;
-}
-
-export function buildSchedule(opts: {
-  sequence: StepKind[];
-  counts: StepCounts;
-  prpName: string;
-  transplant: string | undefined;
-  startDate: string;
-  intervalMonths: number;
-}): PackageStep[] {
-  const seen: StepCounts = { prp: 0, transplant: 0, "prp-free": 0 };
-  return opts.sequence.map((kind, i) => {
-    const n = ++seen[kind];
-    const description =
-      kind === "transplant"
-        ? (opts.transplant ?? "Hair transplant")
-        : kind === "prp"
-          ? `${opts.prpName} ${n} of ${opts.counts.prp}`
-          : `${opts.prpName} ${n} of ${opts.counts["prp-free"]} · complimentary`;
-    return {
-      kind,
-      description,
-      date: addMonths(opts.startDate, i * opts.intervalMonths),
-      complimentary: kind === "prp-free",
-    };
-  });
 }
 
 /** "Today", "Tomorrow", "27 Dec", or "27 Mar 2027" outside the current year. */

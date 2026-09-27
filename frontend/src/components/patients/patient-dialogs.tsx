@@ -1,19 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from "react";
-import {
-  ArrowDown,
-  ArrowUp,
-  CalendarDays,
-  Check,
-  CircleSlash,
-  LoaderCircle,
-  Minus,
-  PackagePlus,
-  Pencil,
-  Plus,
-  RotateCcw,
-  Scissors,
-  Syringe,
-} from "lucide-react";
+import { ArrowRight, CircleSlash, LoaderCircle, PackagePlus, Pencil } from "lucide-react";
 import { Banner, StatusChip, type Tone } from "@/components/crm-ui";
 import {
   inr,
@@ -31,44 +17,44 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ApiError } from "@/lib/api";
-import { getSessionUser, initials } from "@/lib/mock-auth";
-import { useDoctors } from "@/components/appointments/appointments-api";
+import { initials } from "@/lib/mock-auth";
+import { cn } from "@/lib/utils";
 import {
-  addDays,
-  buildSchedule,
   clinicToday,
   formatDay,
   formatVisit,
-  previewPackage,
-  reconcileSequence,
   useCreatePackage,
   usePackages,
   usePatient,
   useSetPackageStatus,
   useUpdatePatient,
   type PackageStatus,
-  type PackageStep,
   type Patient,
-  type StepCounts,
-  type StepKind,
   type TreatmentPackage,
 } from "./patients-api";
+import { PlanItemsEditor, PlanPreview } from "@/components/plans/plan-editor";
+import {
+  usePlans,
+  useQuote,
+  type PackageRequest,
+  type PlanItem,
+  type StepView,
+} from "@/components/plans/plans-api";
+import { useDebounced } from "@/lib/use-debounced";
 
 export type EditTab = "details" | "package";
 
 function errorText(error: unknown): string {
   if (error instanceof ApiError) {
-    if (error.status === 403) return "Only doctors and Super Admins can create packages.";
+    if (error.status === 403) return "You don’t have permission to do that.";
     return error.message;
   }
   return "Couldn’t reach the clinic server. Make sure the backend is running.";
 }
 
 const PACKAGE_TONE: Record<PackageStatus, Tone> = {
-  Proposed: "warning",
   Accepted: "success",
   Completed: "neutral",
   Cancelled: "error",
@@ -79,17 +65,20 @@ const PACKAGE_TONE: Record<PackageStatus, Tone> = {
 export function PatientProfileDialog({
   patientId,
   canCreatePackages,
+  canEditRecord,
   onOpenChange,
   onEdit,
 }: {
   patientId: string | null;
   canCreatePackages: boolean;
+  /** "Edit patient record" is offered only from the Patients page. */
+  canEditRecord: boolean;
   onOpenChange: (open: boolean) => void;
   onEdit: (id: string, tab: EditTab) => void;
 }) {
   const { data: patient, isPending } = usePatient(patientId);
   const { data: packages } = usePackages(patientId);
-  const next = upcomingSteps(packages ?? [])[0];
+  const next = upcomingVisits(packages ?? [])[0];
 
   return (
     <Dialog open={patientId !== null} onOpenChange={onOpenChange}>
@@ -132,7 +121,7 @@ export function PatientProfileDialog({
                 <div>
                   <span>Next session</span>
                   <strong>
-                    {formatDay(next.date)} · {next.description}
+                    {formatDay(next.date)} · {next.title}
                   </strong>
                 </div>
               ) : (
@@ -152,10 +141,12 @@ export function PatientProfileDialog({
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Close
               </Button>
-              <Button onClick={() => onEdit(patient.id, "details")}>
-                <Pencil />
-                Edit patient record
-              </Button>
+              {canEditRecord && (
+                <Button onClick={() => onEdit(patient.id, "details")}>
+                  <Pencil />
+                  Edit patient record
+                </Button>
+              )}
             </DialogFooter>
           </>
         )}
@@ -174,19 +165,31 @@ function longDate(date: string): string {
 
 const live = (pkgs: TreatmentPackage[]) => pkgs.filter((p) => p.status !== "Cancelled");
 
-function upcomingSteps(pkgs: TreatmentPackage[]): PackageStep[] {
+function upcomingVisits(pkgs: TreatmentPackage[]): { date: string; title: string }[] {
   const today = clinicToday();
   return live(pkgs)
-    .flatMap((p) => p.schedule)
-    .filter((s) => s.date >= today)
+    .flatMap((p) =>
+      p.steps
+        .filter((s) => s.state === "booked" && s.date! >= today)
+        .map((s) => ({ date: s.date!, title: s.description })),
+    )
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
+const STEP_CAPTION: Record<StepView["state"], string> = {
+  done: "Completed",
+  "in-clinic": "Checked in",
+  booked: "Booked in calendar",
+  missed: "Missed — rebook it",
+  "to-book": "Due — not booked yet",
+};
+
 type TimelineEntry = {
+  /** Empty for package sessions that haven't been booked yet. */
   date: string;
   title: string;
   caption: string;
-  tone: "created" | "done" | "upcoming" | "free" | "surgery";
+  tone: "created" | "done" | "upcoming" | "free" | "surgery" | "pending" | "missed";
 };
 
 /** Clinic visits, package creation and every scheduled session, oldest first. */
@@ -218,23 +221,32 @@ function TreatmentTimeline({
       tone: "created",
     })),
     ...live(packages).flatMap((p) =>
-      p.schedule.map((s): TimelineEntry => ({
-        date: s.date,
+      p.steps.map((s): TimelineEntry => ({
+        date: s.date ?? s.dueDate,
         title: s.description,
-        caption: `${p.id} · ${p.sessionTime} · ${p.doctor} · ${s.date < today ? "Due — not yet recorded" : s.date === today ? "Today" : "In calendar"}`,
+        caption: `${p.id} · ${
+          s.state === "to-book" && s.estimated
+            ? "Due (estimated) — not booked yet"
+            : STEP_CAPTION[s.state]
+        }${s.complimentary ? " · complimentary" : ""}`,
         tone:
-          s.kind === "transplant"
-            ? "surgery"
-            : s.date < today
+          s.state === "missed"
+            ? "missed"
+            : s.state === "done" || s.state === "in-clinic"
               ? "done"
-              : s.complimentary
-                ? "free"
-                : "upcoming",
+              : s.state === "to-book"
+                ? "pending"
+                : s.surgery
+                  ? "surgery"
+                  : s.complimentary
+                    ? "free"
+                    : "upcoming",
       })),
     ),
   ];
   // Stable sort keeps "Package created" ahead of a same-day first session.
-  entries.sort((a, b) => a.date.localeCompare(b.date));
+  // Unbooked sessions go last.
+  entries.sort((a, b) => (a.date || "9999").localeCompare(b.date || "9999"));
 
   return (
     <div className="timeline">
@@ -246,7 +258,7 @@ function TreatmentTimeline({
       )}
       {entries.map((e, i) => (
         <div key={`${e.date}-${e.title}-${i}`}>
-          <span>{formatDay(e.date)}</span>
+          <span>{e.date ? formatDay(e.date) : "To book"}</span>
           <i className={`tl-${e.tone}`} />
           <p>
             <strong>{e.title}</strong>
@@ -296,25 +308,19 @@ function PackageList({
             pkg={pkg}
             actions={
               canManage &&
-              pkg.status === "Proposed" && (
+              pkg.status !== "Cancelled" && (
                 <>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={setStatus.isPending}
-                    onClick={() => setStatus.mutate({ id: pkg.id, status: "Cancelled" })}
-                  >
-                    <CircleSlash />
-                    Cancel
-                  </Button>
-                  <Button
-                    size="sm"
-                    disabled={setStatus.isPending}
-                    onClick={() => setStatus.mutate({ id: pkg.id, status: "Accepted" })}
-                  >
-                    <Check />
-                    Mark accepted
-                  </Button>
+                  {pkg.status === "Accepted" && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={setStatus.isPending}
+                      onClick={() => setStatus.mutate({ id: pkg.id, status: "Cancelled" })}
+                    >
+                      <CircleSlash />
+                      Cancel package
+                    </Button>
+                  )}
                 </>
               )
             }
@@ -336,17 +342,40 @@ function PackageCard({ pkg, actions }: { pkg: TreatmentPackage; actions?: ReactN
     <article className="package-card">
       <header>
         <div>
-          <strong>{pkg.id}</strong>
+          <strong>{pkg.name}</strong>
           <small>
-            Created by {pkg.createdBy.name} · {created}
+            {pkg.id} · Created by {pkg.createdBy.name} · {created}
           </small>
         </div>
         <StatusChip tone={PACKAGE_TONE[pkg.status]}>{pkg.status}</StatusChip>
       </header>
       <PriceLines lines={pkg.lines} total={pkg.total} />
+      <PackageProgress pkg={pkg} />
       {pkg.notes && <p className="package-notes">{pkg.notes}</p>}
       {actions && <footer>{actions}</footer>}
     </article>
+  );
+}
+
+/** "3 of 12 visits done · Next: Derma roller, due 10 Oct". */
+function PackageProgress({ pkg }: { pkg: TreatmentPackage }) {
+  const next = pkg.next !== null ? pkg.steps[pkg.next] : undefined;
+  return (
+    <p className="package-progress">
+      <span>
+        {pkg.progress.done} of {pkg.progress.total} visit{pkg.progress.total === 1 ? "" : "s"} done
+      </span>
+      {next && pkg.status === "Accepted" && (
+        <span className={cn(next.state === "missed" && "overdue")}>
+          Next: {next.description}
+          {next.state === "missed"
+            ? ` — missed on ${formatDay(next.date!)}, rebook`
+            : next.surgery
+              ? " — not booked yet"
+              : `, due ${next.estimated ? "~" : ""}${formatDay(next.dueDate)}`}
+        </span>
+      )}
+    </p>
   );
 }
 
@@ -401,11 +430,14 @@ export function EditPatientDialog({
   canCreatePackages,
   onOpenChange,
   onNotice,
+  onPackageCreated,
 }: {
   editing: { id: string; tab: EditTab } | null;
   canCreatePackages: boolean;
   onOpenChange: (open: boolean) => void;
   onNotice: (message: string) => void;
+  /** Called after "Next" — the parent takes the user to the calendar to book sessions. */
+  onPackageCreated: (pkg: TreatmentPackage) => void;
 }) {
   const { data: patient } = usePatient(editing?.id ?? null);
   const [tab, setTab] = useState<EditTab>("details");
@@ -456,9 +488,7 @@ export function EditPatientDialog({
                   onCancel={() => onOpenChange(false)}
                   onCreated={(pkg) => {
                     onOpenChange(false);
-                    onNotice(
-                      `Package ${pkg.id} created for ${patient.name} · ${inr.format(pkg.total)}.`,
-                    );
+                    onPackageCreated(pkg);
                   }}
                 />
               ) : (
@@ -598,83 +628,24 @@ function PackageBuilder({
   onCreated: (pkg: TreatmentPackage) => void;
 }) {
   const { data: treatments, isPending, isError, error } = useCatalog<TreatmentOption>("treatments");
+  const { data: plans } = usePlans();
   const create = useCreatePackage(patient.id);
-
-  const prp = treatments?.find(
-    (t) => t.active && t.category === "PRP" && t.pricingUnit === "session",
-  );
-  const fue = treatments?.find(
-    (t) => t.active && t.category === "Transplant" && t.pricingUnit === "graft",
-  );
-
-  const [prpSessions, setPrpSessions] = useState(0);
-  const [withTransplant, setWithTransplant] = useState(false);
-  const [grafts, setGrafts] = useState("2500");
-  const [pricePerGraft, setPricePerGraft] = useState<string | null>(null); // null = use Settings price
+  const [planId, setPlanId] = useState("");
+  const [items, setItems] = useState<PlanItem[]>([]);
+  const [startDate, setStartDate] = useState(clinicToday());
   const [notes, setNotes] = useState("");
-  const [startDate, setStartDate] = useState(() => addDays(clinicToday(), 1));
-  const [intervalMonths, setIntervalMonths] = useState(3);
-  const [sessionTime, setSessionTime] = useState("10:00");
-  const { data: doctors } = useDoctors();
-  const [doctor, setDoctor] = useState(() => {
-    const me = getSessionUser();
-    return me.role === "Reception" ? "" : me.name;
-  });
-  // The user's arrangement; reconciled with the current quantities on every render.
-  const [order, setOrder] = useState<StepKind[]>([]);
 
-  const graftPrice = pricePerGraft ?? String(fue?.price ?? "");
-  const graftPriceChanged =
-    pricePerGraft !== null && fue !== undefined && Number(pricePerGraft) !== fue.price;
-  const request = {
-    prpSessions,
-    ...(withTransplant &&
-      Number(grafts) > 0 && {
-        transplant: {
-          grafts: Number(grafts),
-          ...(graftPriceChanged && { pricePerGraft: Number(graftPrice) }),
-        },
-      }),
+  const plan = plans?.find((p) => p.id === planId);
+  const request: PackageRequest = {
+    ...(plan && { planId: plan.id }),
+    items,
+    startDate,
     ...(notes.trim() && { notes: notes.trim() }),
   };
-  const preview = previewPackage(request, prp, fue);
-  const empty = preview.lines.length === 0;
-
-  const counts: StepCounts = {
-    prp: prp ? preview.paidPrp : 0,
-    transplant: request.transplant && fue ? 1 : 0,
-    "prp-free": prp ? preview.freePrp : 0,
-  };
-  const sequence = reconcileSequence(order, counts);
-  const validStart = /^\d{4}-\d{2}-\d{2}$/.test(startDate);
-  const schedule = validStart
-    ? buildSchedule({
-        sequence,
-        counts,
-        prpName: prp?.name ?? "PRP session",
-        transplant: preview.lines.find((l) => l.unit === "graft")?.description,
-        startDate,
-        intervalMonths,
-      })
-    : [];
-  const freeBeforeTransplant =
-    counts.transplant > 0 &&
-    sequence.indexOf("prp-free") > -1 &&
-    sequence.indexOf("prp-free") < sequence.indexOf("transplant");
-  const move = (from: number, to: number) => {
-    const next = [...sequence];
-    const [step] = next.splice(from, 1);
-    next.splice(to, 0, step!);
-    setOrder(next);
-  };
-  const fullRequest = {
-    ...request,
-    startDate,
-    intervalMonths,
-    sequence,
-    sessionTime,
-    ...(doctor && { doctor }),
-  };
+  const priced = useDebounced(items, 350);
+  const quote = useQuote(priced.length ? { items: priced, startDate } : null);
+  const active = (treatments ?? []).filter((t) => t.active);
+  const activePlans = (plans ?? []).filter((p) => p.active);
 
   if (isPending) return <Skeleton className="mt-4 h-64 w-full" />;
   if (isError)
@@ -684,272 +655,77 @@ function PackageBuilder({
       </div>
     );
 
+  const choosePlan = (id: string) => {
+    setPlanId(id);
+    const chosen = plans?.find((p) => p.id === id);
+    setItems(chosen ? structuredClone(chosen.items) : []);
+  };
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (!empty && validStart) create.mutate(fullRequest, { onSuccess: onCreated });
+    if (items.length) create.mutate(request, { onSuccess: onCreated });
   };
+  const startsWithSurgery = quote.data?.steps.some((s) => s.surgery);
 
   return (
-    <form onSubmit={submit} className="package-builder">
+    <form onSubmit={submit} className="package-builder plan-builder">
       <div className="package-options">
-        <section className="package-option">
-          <header>
-            <span className="package-option-icon">
-              <Syringe />
-            </span>
-            <div>
-              <strong>PRP sessions</strong>
-              <small>
-                {prp
-                  ? `${inr.format(prp.price)} per session · from Settings`
-                  : "Add a per-session PRP treatment in Settings"}
-              </small>
-            </div>
-          </header>
-          <div className="stepper" role="group" aria-label="Number of PRP sessions">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              aria-label="Fewer sessions"
-              disabled={!prp || prpSessions <= 0}
-              onClick={() => setPrpSessions((n) => Math.max(0, n - 1))}
-            >
-              <Minus />
-            </Button>
-            <input
-              type="number"
-              inputMode="numeric"
-              min={0}
-              max={24}
-              value={prpSessions}
-              disabled={!prp}
-              aria-label="PRP sessions"
-              onChange={(e) =>
-                setPrpSessions(Math.min(24, Math.max(0, Math.floor(Number(e.target.value) || 0))))
-              }
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              aria-label="More sessions"
-              disabled={!prp || prpSessions >= 24}
-              onClick={() => setPrpSessions((n) => Math.min(24, n + 1))}
-            >
-              <Plus />
-            </Button>
-          </div>
-        </section>
-
-        <section className={`package-option${withTransplant ? " selected" : ""}`}>
-          <header>
-            <span className="package-option-icon">
-              <Scissors />
-            </span>
-            <div>
-              <strong>{fue?.name ?? "Hair transplant"}</strong>
-              <small>
-                {fue
-                  ? `Priced per graft${fue.complimentaryPrpSessions ? ` · includes ${fue.complimentaryPrpSessions} free PRP sessions` : ""}`
-                  : "Add a per-graft transplant treatment in Settings"}
-              </small>
-            </div>
-            <Switch
-              checked={withTransplant}
-              disabled={!fue}
-              onCheckedChange={setWithTransplant}
-              aria-label="Include hair transplant"
-            />
-          </header>
-          {withTransplant && fue && (
-            <div className="form-grid">
-              <label>
-                Number of grafts
-                <input
-                  required
-                  type="number"
-                  inputMode="numeric"
-                  min={100}
-                  max={8000}
-                  step={50}
-                  value={grafts}
-                  onChange={(e) => setGrafts(e.target.value)}
-                />
-              </label>
-              {/* Reset sits outside the <label> so the label stays bound to the input. */}
-              <div className="graft-price-field">
-                <label>
-                  Price per graft (₹)
-                  <input
-                    required
-                    type="number"
-                    inputMode="numeric"
-                    min={1}
-                    max={1000}
-                    step={1}
-                    value={graftPrice}
-                    onChange={(e) => setPricePerGraft(e.target.value)}
-                  />
-                </label>
-                {graftPriceChanged && (
-                  <button
-                    type="button"
-                    className="link-reset"
-                    onClick={() => setPricePerGraft(null)}
-                  >
-                    <RotateCcw />
-                    Reset to {inr.format(fue.price)}
-                  </button>
-                )}
-              </div>
-              {graftPriceChanged && (
-                <p className="full field-hint">
-                  Custom price for this package only. Settings default stays {inr.format(fue.price)}{" "}
-                  per graft.
-                </p>
-              )}
-            </div>
-          )}
-        </section>
-
-        {!empty && (
-          <section className="package-option">
-            <header>
-              <span className="package-option-icon">
-                <CalendarDays />
-              </span>
-              <div>
-                <strong>Schedule</strong>
-                <small>
-                  First session on the start date, then one every {intervalMonths} month
-                  {intervalMonths === 1 ? "" : "s"}, each booked in the appointment calendar. Use
-                  the arrows to change the order.
-                </small>
-              </div>
-            </header>
-            <div className="form-grid">
-              <label>
-                Start date
-                <input
-                  required
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                />
-              </label>
-              <label>
-                Months between sessions
-                <input
-                  required
-                  type="number"
-                  inputMode="numeric"
-                  min={1}
-                  max={12}
-                  value={intervalMonths}
-                  onChange={(e) =>
-                    setIntervalMonths(
-                      Math.min(12, Math.max(1, Math.floor(Number(e.target.value) || 1))),
-                    )
-                  }
-                />
-              </label>
-              <label>
-                Session time
-                <input
-                  required
-                  type="time"
-                  step={900}
-                  value={sessionTime}
-                  onChange={(e) => setSessionTime(e.target.value)}
-                />
-              </label>
-              <label>
-                Doctor
-                <select value={doctor} onChange={(e) => setDoctor(e.target.value)}>
-                  {[...new Set([doctor, ...(doctors ?? []).map((d) => d.name)])]
-                    .filter(Boolean)
-                    .map((name) => (
-                      <option key={name}>{name}</option>
-                    ))}
-                </select>
-              </label>
-            </div>
-            <ol className="schedule-steps" aria-label="Session order">
-              {schedule.map((step, i) => (
-                <li key={`${step.kind}-${i}`} className={`step-${step.kind}`}>
-                  <span className="step-no">{i + 1}</span>
-                  <div className="min-w-0">
-                    <strong>{step.description}</strong>
-                    <small>{longDate(step.date)}</small>
-                  </div>
-                  {step.complimentary && <StatusChip tone="success">Free</StatusChip>}
-                  <div className="step-move">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Move ${step.description} earlier`}
-                      disabled={i === 0}
-                      onClick={() => move(i, i - 1)}
-                    >
-                      <ArrowUp />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Move ${step.description} later`}
-                      disabled={i === schedule.length - 1}
-                      onClick={() => move(i, i + 1)}
-                    >
-                      <ArrowDown />
-                    </Button>
-                  </div>
-                </li>
+        <div className="form-grid">
+          <label>
+            Start from plan
+            <select value={planId} onChange={(e) => choosePlan(e.target.value)}>
+              <option value="">Custom — build from scratch</option>
+              {activePlans.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
               ))}
-            </ol>
-            {freeBeforeTransplant && (
-              <p className="field-hint">
-                Complimentary PRP is scheduled before the transplant it comes with.
-              </p>
-            )}
-          </section>
-        )}
-
+            </select>
+          </label>
+          <label>
+            First visit due
+            <input
+              type="date"
+              required
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </label>
+          {plan?.description && <p className="full field-note">{plan.description}</p>}
+        </div>
+        <PlanItemsEditor items={items} onChange={setItems} treatments={active} pricing />
+        <p className="field-note">
+          Leave a price empty for the Settings price, enter a new one for this patient, or set ₹0 /
+          Free to waive it.
+        </p>
         <label className="package-notes-field">
           Notes for the patient
           <textarea
             maxLength={1000}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Optional — session schedule, pre-op instructions, payment terms"
+            placeholder="Optional — pre-op instructions, payment terms"
           />
         </label>
       </div>
 
       <aside className="package-summary" aria-live="polite">
-        <h4>Package summary</h4>
+        <h4>{plan?.name ?? "Custom plan"}</h4>
         <p className="package-summary-for">
           For {patient.name}
           {patient.concern && ` · ${patient.concern}`}
         </p>
-        {empty ? (
-          <p className="package-empty">Add PRP sessions or a hair transplant to see the price.</p>
+        {items.length === 0 ? (
+          <p className="package-empty">Choose a plan or add steps to see the price and dates.</p>
         ) : (
           <>
-            <PriceLines lines={preview.lines} total={preview.total} />
-            <p className="package-sessions">
-              {preview.paidPrp + preview.freePrp} PRP sessions in total
-              {preview.freePrp > 0 && ` (${preview.paidPrp} paid + ${preview.freePrp} free)`}
-            </p>
-            {schedule.length > 0 && (
-              <p className="package-sessions">
-                {schedule.length === 1
-                  ? `On ${longDate(schedule[0]!.date)}`
-                  : `${longDate(schedule[0]!.date)} → ${longDate(schedule[schedule.length - 1]!.date)}`}
-              </p>
-            )}
+            {quote.data && <PriceLines lines={quote.data.lines} total={quote.data.total} />}
+            <PlanPreview
+              quote={quote.data}
+              isPending={quote.isFetching}
+              error={quote.error}
+              markSurgical={false}
+              showRounds={false}
+            />
           </>
         )}
         {create.isError && <Banner tone="error">{errorText(create.error)}</Banner>}
@@ -957,16 +733,16 @@ function PackageBuilder({
           <Button type="button" variant="outline" onClick={onCancel} disabled={create.isPending}>
             Cancel
           </Button>
-          <Button type="submit" disabled={empty || !validStart || create.isPending}>
+          <Button type="submit" disabled={!items.length || create.isPending}>
             {create.isPending ? (
               <>
                 <LoaderCircle className="animate-spin" />
-                Creating…
+                Saving…
               </>
             ) : (
               <>
-                <PackagePlus />
-                Create package
+                {startsWithSurgery ? "Next: schedule surgery" : "Create package"}
+                <ArrowRight />
               </>
             )}
           </Button>

@@ -138,7 +138,7 @@ describe('CRM API (e2e)', () => {
         .expect(400);
     });
 
-    it('stores FUE as a 1–2 day range and validates ranges', async () => {
+    it('stores FUE as a 1–3 day range and validates ranges', async () => {
       const list = await request(app.getHttpServer())
         .get('/api/catalog/treatments')
         .set(authed())
@@ -147,7 +147,7 @@ describe('CRM API (e2e)', () => {
         (list.body as { name: string }[]).find(
           (t) => t.name === 'FUE hair transplant',
         ),
-      ).toMatchObject({ duration: 1, durationMax: 2, durationUnit: 'days' });
+      ).toMatchObject({ duration: 1, durationMax: 3, durationUnit: 'days' });
 
       await request(app.getHttpServer())
         .post('/api/catalog/treatments')
@@ -186,183 +186,663 @@ describe('CRM API (e2e)', () => {
     });
   });
 
-  describe('treatment packages', () => {
-    const create = (token: string, body: object, patientId = 'PT-1081') =>
+  it('marks a visit missed after its day passes, and keeps it editable', async () => {
+    const booked = await request(app.getHttpServer())
+      .post('/api/appointments')
+      .set(authed())
+      .send({
+        patientId: 'PT-1083',
+        type: 'Consultation',
+        doctor: 'Dr. Bhushan Patil',
+        startsAt: '2026-09-01T11:00:00+05:30',
+      })
+      .expect(201);
+    const id = (booked.body as { id: string }).id;
+    const statusOf = async () =>
+      (
+        (
+          await request(app.getHttpServer())
+            .get(`/api/appointments/${id}`)
+            .set(authed())
+            .expect(200)
+        ).body as { status: string }
+      ).status;
+    const listed = await request(app.getHttpServer())
+      .get('/api/appointments?status=Missed')
+      .set(authed())
+      .expect(200);
+    expect((listed.body as { id: string }[]).map((a) => a.id)).toContain(id);
+    expect(await statusOf()).toBe('Missed');
+
+    // The patient did come after all: check in from Missed
+    await request(app.getHttpServer())
+      .post(`/api/appointments/${id}/check-in`)
+      .set(authed())
+      .expect(200);
+    await request(app.getHttpServer())
+      .delete(`/api/appointments/${id}/check-in`)
+      .set(authed())
+      .expect(200);
+    // Or reschedule: a missed visit moves to Rescheduled
+    await request(app.getHttpServer())
+      .patch(`/api/appointments/${id}`)
+      .set(authed())
+      .send({ startsAt: '2027-01-05T11:00:00+05:30' })
+      .expect(200);
+    expect(await statusOf()).toBe('Rescheduled');
+  });
+
+  describe('treatment plans and packages', () => {
+    const PRP = 'TO-3';
+    const FUE = 'TO-6';
+    const ROLLER = 'TO-7';
+    const CONSULT = 'TO-1';
+    const days = (value: number) => ({ value, unit: 'days' });
+    const create = (body: object, patientId: string, auth = authed()) =>
       request(app.getHttpServer())
         .post(`/api/patients/${patientId}/packages`)
-        .set({ Authorization: `Bearer ${token}` })
+        .set(auth)
         .send(body);
-    type Step = { kind: string; date: string };
-    const steps = (res: { body: unknown }) =>
-      (res.body as { schedule: Step[] }).schedule;
+    type Step = {
+      index: number;
+      description: string;
+      state: string;
+      dueDate: string;
+      windowStart: string;
+      windowEnd: string;
+      estimated: boolean;
+      amount: number;
+      complimentary: boolean;
+      surgery: boolean;
+      cycle?: { n: number; of: number };
+      appointmentId?: string;
+      date?: string;
+    };
+    type Pkg = {
+      id: string;
+      name: string;
+      status: string;
+      total: number;
+      steps: Step[];
+      lines: {
+        description: string;
+        quantity: number;
+        amount: number;
+        complimentary: boolean;
+      }[];
+      progress: { done: number; total: number };
+      next: number | null;
+      createdBy: { role: string };
+    };
+    type Apt = {
+      id: string;
+      startsAt: string;
+      days?: number;
+      durationMinutes: number;
+      status: string;
+      packageId?: string | null;
+      packageStep?: number | null;
+    };
     const demo = async (role: string) =>
       (await request(app.getHttpServer()).post('/api/auth/demo').send({ role }))
         .body.accessToken as string;
+    let phone = 91000;
+    const newPatient = async (name: string) =>
+      (
+        (
+          await request(app.getHttpServer())
+            .post('/api/patients')
+            .set(authed())
+            .send({ name, phone: `+91 90000 ${phone++}` })
+            .expect(201)
+        ).body as { id: string }
+      ).id;
+    const pkgOf = async (patientId: string, id: string) =>
+      (
+        (
+          await request(app.getHttpServer())
+            .get(`/api/patients/${patientId}/packages`)
+            .set(authed())
+            .expect(200)
+        ).body as Pkg[]
+      ).find((p) => p.id === id)!;
+    const bookStep = (pkgId: string, index: number, body: object) =>
+      request(app.getHttpServer())
+        .post(`/api/packages/${pkgId}/sessions/${index}/appointment`)
+        .set(authed())
+        .send({ doctor: 'Dr. Bhushan Patil', ...body });
+    const bookVisit = (patientId: string, type: string, startsAt: string) =>
+      request(app.getHttpServer())
+        .post('/api/appointments')
+        .set(authed())
+        .send({ patientId, type, doctor: 'Dr. Bhushan Patil', startsAt })
+        .expect(201);
+    const appointment = async (id: string) =>
+      (
+        await request(app.getHttpServer())
+          .get(`/api/appointments/${id}`)
+          .set(authed())
+          .expect(200)
+      ).body as Apt;
+    const appointmentsOn = async (query: string) =>
+      (
+        await request(app.getHttpServer())
+          .get(`/api/appointments?${query}`)
+          .set(authed())
+          .expect(200)
+      ).body as Apt[];
+    const checkInAndComplete = async (id: string) => {
+      await request(app.getHttpServer())
+        .post(`/api/appointments/${id}/check-in`)
+        .set(authed())
+        .expect(200);
+      await request(app.getHttpServer())
+        .post(`/api/appointments/${id}/complete`)
+        .set(authed())
+        .expect(200);
+    };
+    const today = () =>
+      new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(
+        new Date(),
+      );
+    const plus = (date: string, n: number) => {
+      const t = new Date(`${date}T00:00:00Z`);
+      t.setUTCDate(t.getUTCDate() + n);
+      return t.toISOString().slice(0, 10);
+    };
 
-    it('prices PRP sessions from Settings', async () => {
-      const res = await create(token, { prpSessions: 4 }).expect(201);
-      expect(res.body).toMatchObject({
-        total: 4 * 4500,
-        prpSessions: 4,
-        status: 'Proposed',
+    it('seeds plans, and lets any role create one with repeat blocks', async () => {
+      const list = await request(app.getHttpServer())
+        .get('/api/treatment-plans')
+        .set(authed())
+        .expect(200);
+      expect((list.body as { name: string }[]).map((p) => p.name)).toEqual(
+        expect.arrayContaining([
+          'PRP with derma roller',
+          'Hair transplant with PRP care',
+        ]),
+      );
+      const reception = { Authorization: `Bearer ${await demo('Reception')}` };
+      const plan = {
+        name: 'Roller cycle',
+        items: [
+          {
+            repeat: 2,
+            steps: [
+              { treatmentId: PRP, gap: days(7) },
+              { treatmentId: ROLLER, gap: days(7) },
+            ],
+          },
+        ],
+      };
+      const created = await request(app.getHttpServer())
+        .post('/api/treatment-plans')
+        .set(reception)
+        .send(plan)
+        .expect(201);
+      expect(created.body).toMatchObject({
+        name: 'Roller cycle',
+        active: true,
       });
+      // windowDays defaults to 2
+      expect(created.body.items[0].steps[0]).toMatchObject({ windowDays: 2 });
+      await request(app.getHttpServer())
+        .post('/api/treatment-plans')
+        .set(authed())
+        .send({ ...plan, name: 'roller CYCLE' })
+        .expect(409);
+      await request(app.getHttpServer())
+        .post('/api/treatment-plans')
+        .set(authed())
+        .send({ name: 'Bad', items: [{ treatmentId: 'TO-404' }] })
+        .expect(400);
+      await request(app.getHttpServer())
+        .post('/api/treatment-plans')
+        .set(authed())
+        .send({
+          name: 'Too long',
+          items: [
+            {
+              repeat: 21,
+              steps: [
+                { treatmentId: PRP },
+                { treatmentId: ROLLER },
+                { treatmentId: ROLLER },
+              ],
+            },
+          ],
+        })
+        .expect(400);
+      const id = (created.body as { id: string }).id;
+      await request(app.getHttpServer())
+        .patch(`/api/treatment-plans/${id}`)
+        .set(reception)
+        .send({ description: 'Short course' })
+        .expect(200);
+      await request(app.getHttpServer())
+        .delete(`/api/treatment-plans/${id}`)
+        .set(reception)
+        .expect(204);
     });
 
-    it('prices FUE per graft and adds 3 complimentary PRP sessions', async () => {
-      const doctor = await demo('Doctor');
-      const res = await create(doctor, {
-        prpSessions: 2,
-        transplant: { grafts: 2500 },
-      }).expect(201);
-      expect(res.body.total).toBe(2 * 4500 + 2500 * 20);
-      expect(res.body.prpSessions).toBe(5);
-      expect(res.body.createdBy).toMatchObject({ role: 'Doctor' });
-      expect(res.body.lines).toContainEqual(
+    it('prices a package per step; the doctor can change or waive any cost', async () => {
+      const patientId = await newPatient('Pricing Test');
+      const doctor = { Authorization: `Bearer ${await demo('Doctor')}` };
+      const res = await create(
+        {
+          planId: 'TP-2',
+          items: [
+            { treatmentId: FUE, quantity: 2500, unitPrice: 25 },
+            {
+              repeat: 3,
+              steps: [
+                {
+                  treatmentId: PRP,
+                  gap: { value: 2, unit: 'months' },
+                  complimentary: true,
+                },
+              ],
+            },
+            { treatmentId: ROLLER, gap: days(7), unitPrice: 0 },
+            { treatmentId: CONSULT, gap: days(7) },
+          ],
+        },
+        patientId,
+        doctor,
+      ).expect(201);
+      const pkg = res.body as Pkg;
+      expect(pkg).toMatchObject({
+        name: 'Hair transplant with PRP care',
+        status: 'Accepted',
+        total: 2500 * 25 + 800,
+        createdBy: { role: 'Doctor' },
+        progress: { done: 0, total: 6 },
+        next: 0,
+      });
+      expect(pkg.steps.map((s) => [s.description, s.amount])).toEqual([
+        ['FUE hair transplant · 2,500 grafts', 62500],
+        ['PRP session', 0],
+        ['PRP session', 0],
+        ['PRP session', 0],
+        ['Derma roller', 0],
+        ['Consultation', 800],
+      ]);
+      // Only treatments tagged surgical in Settings are surgery (booked via Pending bookings)
+      expect(pkg.steps.map((s) => s.surgery)).toEqual([
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+      ]);
+      expect(pkg.lines).toContainEqual(
         expect.objectContaining({
-          complimentary: true,
+          description: 'PRP session · complimentary',
           quantity: 3,
           amount: 0,
         }),
       );
-
       const patient = await request(app.getHttpServer())
-        .get('/api/patients/PT-1081')
+        .get(`/api/patients/${patientId}`)
         .set(authed())
         .expect(200);
-      expect(patient.body.treatment).toBe('Package · FUE 2,500 grafts + 5 PRP');
-    });
-
-    it('schedules 3 PRP sessions 3 months apart from the start date', async () => {
-      const res = await create(token, {
-        prpSessions: 3,
-        startDate: '2026-09-27',
-      }).expect(201);
-      expect(steps(res).map((s) => s.date)).toEqual([
-        '2026-09-27',
-        '2026-12-27',
-        '2027-03-27',
-      ]);
-    });
-
-    it('schedules the transplant, then its 3 free PRP sessions 3 months apart', async () => {
-      const res = await create(token, {
-        transplant: { grafts: 2000 },
-        startDate: '2026-09-30',
-      }).expect(201);
-      expect(steps(res).map((s) => `${s.kind} ${s.date}`)).toEqual([
-        'transplant 2026-09-30',
-        'prp-free 2026-12-30',
-        'prp-free 2027-03-30',
-        'prp-free 2027-06-30',
-      ]);
-    });
-
-    it('follows a custom order and clamps month ends', async () => {
-      const res = await create(token, {
-        prpSessions: 1,
-        transplant: { grafts: 1500 },
-        startDate: '2026-11-30',
-        sequence: ['prp', 'transplant', 'prp-free', 'prp-free', 'prp-free'],
-      }).expect(201);
-      expect(steps(res).map((s) => `${s.kind} ${s.date}`)).toEqual([
-        'prp 2026-11-30',
-        'transplant 2027-02-28',
-        'prp-free 2027-05-30',
-        'prp-free 2027-08-30',
-        'prp-free 2027-11-30',
-      ]);
-      await create(token, { prpSessions: 2, sequence: ['prp'] }).expect(400);
-    });
-
-    it('books every session in the appointment calendar and keeps it in sync', async () => {
-      const res = await create(
-        token,
-        {
-          transplant: { grafts: 2000 },
-          startDate: '2026-09-30',
-          sessionTime: '09:30',
-          doctor: 'Dr. Sonal Desai',
-        },
-        'PT-1080',
-      ).expect(201);
-      const pkgId = (res.body as { id: string }).id;
-      type Apt = {
-        id: string;
-        startsAt: string;
-        type: string;
-        durationMinutes: number;
-        status: string;
-        packageId?: string;
-        doctor: string;
-      };
-      const listFor = async () =>
-        (
-          await request(app.getHttpServer())
-            .get('/api/appointments?patientId=PT-1080')
-            .set(authed())
-            .expect(200)
-        ).body as Apt[];
-
-      const booked = (await listFor()).filter((a) => a.packageId === pkgId);
-      expect(booked.map((a) => a.startsAt)).toEqual([
-        '2026-09-30T04:00:00.000Z', // 09:30 IST
-        '2026-12-30T04:00:00.000Z',
-        '2027-03-30T04:00:00.000Z',
-        '2027-06-30T04:00:00.000Z',
-      ]);
-      expect(booked[0]).toMatchObject({
-        durationMinutes: 480,
-        status: 'Scheduled',
-        doctor: 'Dr. Sonal Desai',
-      });
-      expect(booked[1]).toMatchObject({ durationMinutes: 45 });
-      expect(steps(res).every((s) => 'appointmentId' in s)).toBe(true);
-
-      const month = await request(app.getHttpServer())
-        .get('/api/appointments?month=2026-12')
-        .set(authed())
-        .expect(200);
-      expect((month.body as Apt[]).some((a) => a.packageId === pkgId)).toBe(
-        true,
+      expect(patient.body.treatment).toBe(
+        'Package · Hair transplant with PRP care',
       );
 
-      await request(app.getHttpServer())
-        .patch(`/api/packages/${pkgId}`)
+      // Grafts must be set; an empty plan is refused
+      await create({ items: [{ treatmentId: FUE }] }, patientId).expect(400);
+      await create({ items: [] }, patientId).expect(400);
+      // A quote prices without saving
+      const quote = await request(app.getHttpServer())
+        .post('/api/packages/quote')
         .set(authed())
-        .send({ status: 'Accepted' })
-        .expect(200);
-      expect(
-        (await listFor())
-          .filter((a) => a.packageId === pkgId)
-          .every((a) => a.status === 'Scheduled'),
-      ).toBe(true);
+        .send({
+          items: [{ treatmentId: PRP }, { treatmentId: ROLLER, gap: days(7) }],
+        })
+        .expect(201);
+      expect(quote.body).toMatchObject({ name: 'Custom plan', total: 6000 });
+    });
 
-      // A package session can't be deleted on its own…
-      await request(app.getHttpServer())
-        .delete(`/api/appointments/${booked[1].id}`)
-        .set(authed())
-        .expect(400);
-      // …but cancelling the package clears its upcoming sessions from the calendar.
+    it('works out due dates from the previous procedure day, in repeat blocks', async () => {
+      const patientId = await newPatient('Schedule Test');
+      const plan = (
+        await request(app.getHttpServer())
+          .get('/api/treatment-plans')
+          .set(authed())
+          .expect(200)
+      ).body as { id: string; items: object[] }[];
+      const tp1 = plan.find((p) => p.id === 'TP-1')!;
+      const res = await create(
+        { planId: 'TP-1', items: tp1.items, startDate: '2027-01-04' },
+        patientId,
+      ).expect(201);
+      const pkg = res.body as Pkg;
+      expect(pkg.steps).toHaveLength(12);
+      expect(
+        pkg.steps.slice(0, 4).map((s) => [s.description, s.dueDate]),
+      ).toEqual([
+        ['PRP session', '2027-01-04'],
+        ['Derma roller', '2027-01-11'],
+        ['Derma roller', '2027-01-18'],
+        ['PRP session', '2027-01-25'],
+      ]);
+      expect(pkg.steps[0]).toMatchObject({
+        estimated: false,
+        windowStart: '2027-01-02',
+        windowEnd: '2027-01-06',
+        cycle: { n: 1, of: 4 },
+      });
+      expect(pkg.steps[3]).toMatchObject({
+        estimated: true,
+        cycle: { n: 2, of: 4 },
+      });
+
+      // PRP booked two days late: the rollers move with it
+      const booked = await bookStep(pkg.id, 0, {
+        startsAt: '2027-01-06T10:00:00+05:30',
+      }).expect(201);
+      expect(
+        (booked.body as Pkg).steps.slice(0, 3).map((s) => [s.state, s.dueDate]),
+      ).toEqual([
+        ['booked', '2027-01-04'],
+        ['to-book', '2027-01-13'],
+        ['to-book', '2027-01-20'],
+      ]);
+    });
+
+    it('moves the rest of the plan to the day a visit was actually done, and reminds when due', async () => {
+      const patientId = await newPatient('Reminder Test');
+      const start = plus(today(), -10);
+      const res = await create(
+        {
+          items: [
+            { treatmentId: PRP },
+            { treatmentId: ROLLER, gap: days(7), windowDays: 1 },
+            { treatmentId: ROLLER, gap: days(7) },
+          ],
+          startDate: start,
+        },
+        patientId,
+      ).expect(201);
+      const pkgId = (res.body as Pkg).id;
+      type Due = {
+        packageId: string;
+        stepIndex: number;
+        dueDate: string;
+        overdueDays: number;
+        treatment: string;
+        phone?: string;
+      };
+      const due = async () =>
+        (
+          (
+            await request(app.getHttpServer())
+              .get('/api/packages/due')
+              .set(authed())
+              .expect(200)
+          ).body as Due[]
+        ).filter((d) => d.packageId === pkgId);
+
+      // First visit is overdue → reminded
+      expect(await due()).toEqual([
+        expect.objectContaining({
+          stepIndex: 0,
+          dueDate: start,
+          overdueDays: 8,
+          treatment: 'PRP session',
+        }),
+      ]);
+
+      // The patient comes 3 days late (booked for that day, checked in from Missed, completed)
+      const done = plus(start, 3);
+      const booked = await bookStep(pkgId, 0, {
+        startsAt: `${done}T10:00:00+05:30`,
+      }).expect(201);
+      const prp = (booked.body as Pkg).steps[0].appointmentId!;
+      // Booked for a day already gone → Missed, so it's still on the reminder list
+      expect(await due()).toEqual([
+        expect.objectContaining({ stepIndex: 0, missed: true }),
+      ]);
+      await checkInAndComplete(prp);
+
+      const after = await pkgOf(patientId, pkgId);
+      expect(after.steps[1]).toMatchObject({
+        dueDate: plus(done, 7),
+        estimated: false,
+        state: 'to-book',
+      });
+      expect(after.steps[2]).toMatchObject({
+        dueDate: plus(done, 14),
+        estimated: true,
+      });
+      expect(await due()).toEqual([
+        expect.objectContaining({
+          stepIndex: 1,
+          dueDate: plus(done, 7),
+          treatment: 'Derma roller',
+        }),
+      ]);
+
+      // A plain booking of the same treatment takes that step
+      const roller = (
+        await bookVisit(
+          patientId,
+          'Derma roller',
+          `${plus(today(), 2)}T11:00:00+05:30`,
+        )
+      ).body as Apt;
+      expect(roller).toMatchObject({ packageId: pkgId, packageStep: 1 });
+      expect(await due()).toEqual([]);
+      // Unrelated treatments don't link
+      const consult = (
+        await bookVisit(
+          patientId,
+          'Consultation',
+          `${plus(today(), 2)}T12:00:00+05:30`,
+        )
+      ).body as Apt;
+      expect(consult.packageId).toBeUndefined();
+    });
+
+    it('books a surgery over 1–3 days, blocking the theatre but not OPD', async () => {
+      const a = await newPatient('Surgery A');
+      const b = await newPatient('Surgery B');
+      const first = await create(
+        {
+          items: [
+            { treatmentId: FUE, quantity: 2200 },
+            { treatmentId: PRP, gap: { value: 2, unit: 'months' } },
+          ],
+        },
+        a,
+      ).expect(201);
+      const firstId = (first.body as Pkg).id;
+      const booked = await bookStep(firstId, 0, {
+        startsAt: '2027-05-10T09:00:00+05:30',
+        days: 3,
+      }).expect(201);
+      const surgery = (booked.body as Pkg).steps[0];
+      for (const day of ['2027-05-10', '2027-05-11', '2027-05-12']) {
+        const onDay = (await appointmentsOn(`date=${day}`)).filter(
+          (x) => x.id === surgery.appointmentId,
+        );
+        expect(onDay).toEqual([
+          expect.objectContaining({ days: 3, durationMinutes: 480 }),
+        ]);
+      }
+      // The PRP after it is due 2 months after the LAST surgery day
+      expect((booked.body as Pkg).steps[1].dueDate).toBe('2027-07-12');
+      await bookStep(firstId, 0, {
+        startsAt: '2027-06-01T09:00:00+05:30',
+      }).expect(409);
+      await bookStep(firstId, 9, {
+        startsAt: '2027-06-01T09:00:00+05:30',
+      }).expect(400);
+
+      const second = await create(
+        { items: [{ treatmentId: FUE, quantity: 2000 }] },
+        b,
+      ).expect(201);
+      const secondId = (second.body as Pkg).id;
+      const clash = await bookStep(secondId, 0, {
+        startsAt: '2027-05-11T09:00:00+05:30',
+        days: 1,
+      }).expect(409);
+      expect((clash.body as { message: string }).message).toContain(
+        '2027-05-11',
+      );
+      await bookStep(secondId, 0, {
+        startsAt: '2027-05-20T09:00:00+05:30',
+        days: 4,
+      }).expect(400);
+      // OPD on a surgery day is fine
+      await bookVisit(b, 'Consultation', '2027-05-11T12:00:00+05:30');
+      await bookStep(secondId, 0, {
+        startsAt: '2027-05-13T09:00:00+05:30',
+        days: 1,
+      }).expect(201);
+    });
+
+    it('queues surgeries waiting for a slot — including missed ones', async () => {
+      type Pending = {
+        packageId: string;
+        stepIndex: number;
+        surgery: string;
+        missed: boolean;
+      };
+      const queue = async () =>
+        (
+          await request(app.getHttpServer())
+            .get('/api/packages/pending')
+            .set(authed())
+            .expect(200)
+        ).body as Pending[];
+      const patientId = await newPatient('Queue Test');
+      const prpOnly = await create(
+        { items: [{ treatmentId: PRP }] },
+        patientId,
+      ).expect(201);
+      const surgery = await create(
+        {
+          items: [
+            { treatmentId: PRP },
+            { treatmentId: FUE, quantity: 1900, gap: days(30) },
+          ],
+        },
+        patientId,
+      ).expect(201);
+      const prpId = (prpOnly.body as Pkg).id;
+      const surgeryId = (surgery.body as Pkg).id;
+
+      let q = await queue();
+      expect(q.some((p) => p.packageId === prpId)).toBe(false);
+      expect(q.find((p) => p.packageId === surgeryId)).toMatchObject({
+        stepIndex: 1,
+        surgery: 'FUE hair transplant · 1,900 grafts',
+        missed: false,
+      });
+
+      // Booked for a day that has already passed → Missed → back in the queue, first
+      const booked = await bookStep(surgeryId, 1, {
+        startsAt: '2026-09-14T09:00:00+05:30',
+        days: 1,
+      }).expect(201);
+      const surgeryAppt = (booked.body as Pkg).steps[1].appointmentId!;
+      q = await queue();
+      expect(q[0]).toMatchObject({ packageId: surgeryId, missed: true });
+      expect((await appointment(surgeryAppt)).status).toBe('Missed');
+
+      // Re-booking the missed surgery reschedules the same appointment
+      const rebooked = await bookStep(surgeryId, 1, {
+        startsAt: '2027-09-20T09:00:00+05:30',
+        days: 1,
+      }).expect(201);
+      expect((rebooked.body as Pkg).steps[1]).toMatchObject({
+        appointmentId: surgeryAppt,
+        date: '2027-09-20',
+        state: 'booked',
+      });
+      expect((await appointment(surgeryAppt)).status).toBe('Rescheduled');
+      expect((await queue()).some((p) => p.packageId === surgeryId)).toBe(
+        false,
+      );
+    });
+
+    it('completes the package once every step is done', async () => {
+      const patientId = await newPatient('Complete Test');
+      const res = await create(
+        {
+          items: [
+            { treatmentId: ROLLER },
+            { treatmentId: ROLLER, gap: days(0) },
+          ],
+        },
+        patientId,
+      ).expect(201);
+      const pkgId = (res.body as Pkg).id;
+      const time = (t: string) => `${today()}T${t}:00+05:30`;
+      const first = (await bookVisit(patientId, 'Derma roller', time('07:00')))
+        .body as Apt;
+      const second = (await bookVisit(patientId, 'derma ROLLER', time('07:30')))
+        .body as Apt;
+      expect([first.packageStep, second.packageStep]).toEqual([0, 1]);
+      await checkInAndComplete(first.id);
+      expect((await pkgOf(patientId, pkgId)).status).toBe('Accepted');
+      await checkInAndComplete(second.id);
+      expect(await pkgOf(patientId, pkgId)).toMatchObject({
+        status: 'Completed',
+        progress: { done: 2, total: 2 },
+        next: null,
+      });
+    });
+
+    it('removes the package’s visits still to come when it is cancelled', async () => {
+      const patientId = await newPatient('Cancel Test');
+      const res = await create(
+        {
+          items: [
+            { treatmentId: FUE, quantity: 1600 },
+            { treatmentId: PRP, gap: days(60) },
+          ],
+        },
+        patientId,
+      ).expect(201);
+      const pkgId = (res.body as Pkg).id;
+      await bookStep(pkgId, 0, {
+        startsAt: '2027-10-20T10:00:00+05:30',
+        days: 1,
+      }).expect(201);
+      const prp = (
+        await bookVisit(patientId, 'PRP session', '2027-12-20T10:00:00+05:30')
+      ).body as Apt;
+      expect(prp).toMatchObject({ packageId: pkgId, packageStep: 1 });
+      expect(
+        (await appointmentsOn(`patientId=${patientId}`)).filter(
+          (x) => x.packageId === pkgId,
+        ),
+      ).toHaveLength(2);
+      for (const status of ['Accepted', 'Proposed']) {
+        await request(app.getHttpServer())
+          .patch(`/api/packages/${pkgId}`)
+          .set(authed())
+          .send({ status })
+          .expect(400);
+      }
       await request(app.getHttpServer())
         .patch(`/api/packages/${pkgId}`)
         .set(authed())
         .send({ status: 'Cancelled' })
         .expect(200);
       expect(
-        (await listFor()).filter((a) => a.packageId === pkgId),
+        (await appointmentsOn(`patientId=${patientId}`)).filter(
+          (x) => x.packageId === pkgId,
+        ),
       ).toHaveLength(0);
-    });
-
-    it('lets the per-graft price be overridden for one package', async () => {
-      const res = await create(token, {
-        transplant: { grafts: 3000, pricePerGraft: 25 },
-      }).expect(201);
-      expect(res.body.total).toBe(3000 * 25);
-    });
-
-    it('rejects empty packages and receptionists', async () => {
-      await create(token, { prpSessions: 0 }).expect(400);
-      await create(await demo('Reception'), { prpSessions: 2 }).expect(403);
+      await bookStep(pkgId, 0, {
+        startsAt: '2027-11-20T10:00:00+05:30',
+      }).expect(400);
     });
   });
 
@@ -425,7 +905,7 @@ describe('CRM API (e2e)', () => {
       expect(after).toHaveLength(before.length);
     });
 
-    it('edits an appointment: reschedule, change doctor, status and patient', async () => {
+    it('edits an appointment: reschedule, change doctor and patient', async () => {
       const created = await book({ ...slot, patientId: 'PT-1082' }).expect(201);
       const id = (created.body as { id: string }).id;
       const res = await request(app.getHttpServer())
@@ -434,76 +914,121 @@ describe('CRM API (e2e)', () => {
         .send({
           startsAt: '2026-10-07T15:00:00+05:30',
           doctor: 'Dr. Sonal Desai',
-          status: 'Checked in',
           patientId: 'PT-1080',
         })
         .expect(200);
       expect(res.body).toMatchObject({
         startsAt: '2026-10-07T09:30:00.000Z',
         doctor: 'Dr. Sonal Desai',
-        status: 'Checked in',
+        status: 'Rescheduled', // moved to another date/time
         patientId: 'PT-1080',
         patientName: 'Kavita Rao',
       });
     });
 
-    it('moves a rescheduled package session in the package schedule, and keeps its patient', async () => {
+    it('moves a rescheduled surgery in the package, and keeps its patient', async () => {
       const pkg = await request(app.getHttpServer())
         .post('/api/patients/PT-1084/packages')
         .set(authed())
-        .send({ prpSessions: 2, startDate: '2026-10-01' })
+        .send({ items: [{ treatmentId: 'TO-6', quantity: 1700 }] })
         .expect(201);
-      const { id: pkgId, schedule } = pkg.body as {
-        id: string;
-        schedule: { appointmentId: string; date: string }[];
-      };
-      const second = schedule[1];
-      await request(app.getHttpServer())
-        .patch(`/api/appointments/${second.appointmentId}`)
+      const pkgId = (pkg.body as { id: string }).id;
+      const booked = await request(app.getHttpServer())
+        .post(`/api/packages/${pkgId}/sessions/0/appointment`)
         .set(authed())
-        .send({ startsAt: '2027-01-15T10:00:00+05:30' })
+        .send({
+          startsAt: '2027-12-01T10:00:00+05:30',
+          doctor: 'Dr. Bhushan Patil',
+          days: 1,
+        })
+        .expect(201);
+      const surgery = (booked.body as { steps: { appointmentId?: string }[] })
+        .steps[0].appointmentId!;
+      await request(app.getHttpServer())
+        .patch(`/api/appointments/${surgery}`)
+        .set(authed())
+        .send({ startsAt: '2027-12-15T10:00:00+05:30' })
         .expect(200);
       const after = await request(app.getHttpServer())
         .get('/api/patients/PT-1084/packages')
         .set(authed())
         .expect(200);
       const updated = (
-        after.body as { id: string; schedule: { date: string }[] }[]
+        after.body as { id: string; steps: { date?: string }[] }[]
       ).find((p) => p.id === pkgId)!;
-      expect(updated.schedule.map((s) => s.date)).toEqual([
-        '2026-10-01',
-        '2027-01-15',
-      ]);
-
+      expect(updated.steps.map((s) => s.date)).toEqual(['2027-12-15']);
       await request(app.getHttpServer())
-        .patch(`/api/appointments/${second.appointmentId}`)
+        .patch(`/api/appointments/${surgery}`)
         .set(authed())
         .send({ patientId: 'PT-1082' })
         .expect(400);
     });
 
-    it('only allows the four simplified statuses', async () => {
-      const created = await book({ ...slot, patientId: 'PT-1081' }).expect(201);
+    it('moves through Scheduled → Rescheduled → Checked in → Completed', async () => {
+      const call = (
+        method: 'post' | 'delete' | 'patch',
+        path: string,
+        body?: object,
+      ) =>
+        request(app.getHttpServer())
+          [method](`/api/appointments/${path}`)
+          .set(authed())
+          .send(body);
+      type Apt = { status: string };
+
+      // Booked for tomorrow: Scheduled, and can't be checked in yet
+      const tomorrow = new Date(Date.now() + 36 * 3600_000).toISOString();
+      const created = await book({
+        ...slot,
+        patientId: 'PT-1081',
+        startsAt: tomorrow,
+      }).expect(201);
       const id = (created.body as { id: string }).id;
-      for (const status of [
-        'Checked in',
-        'Completed',
-        'No show',
-        'Scheduled',
-      ]) {
-        await request(app.getHttpServer())
-          .patch(`/api/appointments/${id}`)
-          .set(authed())
-          .send({ status })
-          .expect(200);
-      }
-      for (const status of ['Confirmed', 'Waiting', 'Cancelled', 'No-show']) {
-        await request(app.getHttpServer())
-          .patch(`/api/appointments/${id}`)
-          .set(authed())
-          .send({ status })
-          .expect(400);
-      }
+      expect((created.body as Apt).status).toBe('Scheduled');
+      await call('post', `${id}/check-in`).expect(400);
+
+      // Status can't be set by hand any more
+      await call('patch', id, { status: 'Completed' }).expect(400);
+      await call('post', `${id}/complete`).expect(400); // not checked in
+
+      // Patient asks to move it to today → Rescheduled, then arrives → Checked in
+      const nowIso = new Date().toISOString();
+      expect(
+        (
+          (await call('patch', id, { startsAt: nowIso }).expect(200))
+            .body as Apt
+        ).status,
+      ).toBe('Rescheduled');
+      expect(
+        ((await call('post', `${id}/check-in`).expect(200)).body as Apt).status,
+      ).toBe('Checked in');
+      const patient = await request(app.getHttpServer())
+        .get('/api/patients/PT-1081')
+        .set(authed())
+        .expect(200);
+      expect((patient.body as { lastVisit: string }).lastVisit).toBe(
+        new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(
+          new Date(),
+        ),
+      );
+
+      // Undo a mistaken check-in → back to Rescheduled; check in again; can't reschedule once checked in
+      expect(
+        ((await call('delete', `${id}/check-in`).expect(200)).body as Apt)
+          .status,
+      ).toBe('Rescheduled');
+      await call('post', `${id}/check-in`).expect(200);
+      await call('patch', id, { startsAt: tomorrow }).expect(400);
+
+      // Visit done
+      expect(
+        ((await call('post', `${id}/complete`).expect(200)).body as Apt).status,
+      ).toBe('Completed');
+      await call('post', `${id}/complete`).expect(400);
+      // Completed visits can't be edited any more
+      await call('patch', id, { notes: 'Changed afterwards' }).expect(400);
+      await call('patch', id, { doctor: 'Dr. Sonal Desai' }).expect(400);
+      await call('post', `${id}/check-in`).expect(400);
     });
 
     it('rejects patientId and newPatient together', async () => {
@@ -513,6 +1038,493 @@ describe('CRM API (e2e)', () => {
         newPatient: { name: 'X', phone: '+91 90000 00001' },
       }).expect(400);
     });
+  });
+
+  describe('billing from the calendar', () => {
+    type Bill = {
+      source: string;
+      total: number;
+      paid: number;
+      balance: number;
+      status: string;
+      needsCharge: boolean;
+      packageId?: string;
+      payments: {
+        amount: number;
+        method: string;
+        reference?: string;
+        receivedBy: { name: string };
+      }[];
+    };
+    const billOf = async (id: string) =>
+      (
+        await request(app.getHttpServer())
+          .get(`/api/appointments/${id}/billing`)
+          .set(authed())
+          .expect(200)
+      ).body as Bill;
+    const pay = (id: string, body: object, auth = authed()) =>
+      request(app.getHttpServer())
+        .post(`/api/appointments/${id}/payments`)
+        .set(auth)
+        .send(body);
+    const visit = async (type: string, patientId = 'PT-1082') =>
+      (
+        (
+          await request(app.getHttpServer())
+            .post('/api/appointments')
+            .set(authed())
+            .send({
+              patientId,
+              type,
+              doctor: 'Dr. Bhushan Patil',
+              startsAt: '2026-11-03T10:00:00+05:30',
+            })
+            .expect(201)
+        ).body as { id: string }
+      ).id;
+
+    it('bills a visit at the Settings price and takes part payments until paid', async () => {
+      const id = await visit('Consultation');
+      expect(await billOf(id)).toMatchObject({
+        source: 'visit',
+        total: 800,
+        paid: 0,
+        balance: 800,
+        status: 'Not billed',
+        needsCharge: false,
+      });
+
+      const reception = (
+        await request(app.getHttpServer())
+          .post('/api/auth/demo')
+          .send({ role: 'Reception' })
+      ).body.accessToken as string;
+      const part = await pay(
+        id,
+        { amount: 300, method: 'UPI', reference: 'UPI-8841' },
+        { Authorization: `Bearer ${reception}` },
+      ).expect(201);
+      expect(part.body).toMatchObject({
+        paid: 300,
+        balance: 500,
+        status: 'Partially paid',
+      });
+      expect((part.body as Bill).payments[0]).toMatchObject({
+        amount: 300,
+        method: 'UPI',
+        reference: 'UPI-8841',
+        receivedBy: { name: 'Priya More' },
+      });
+
+      await pay(id, { amount: 600, method: 'Cash' }).expect(400); // more than the balance
+      await pay(id, { amount: 500, method: 'Other' }).expect(400); // unknown method
+      const done = await pay(id, { amount: 500, method: 'Cash' }).expect(201);
+      expect(done.body).toMatchObject({
+        paid: 800,
+        balance: 0,
+        status: 'Paid',
+      });
+      await pay(id, { amount: 1, method: 'Cash' }).expect(400); // already paid
+    });
+
+    it('matches "PRP Session 3" to the PRP price, and asks for a charge when the price is unknown', async () => {
+      const prp = await visit('PRP Session 3');
+      expect((await billOf(prp)).total).toBe(4500);
+
+      const review = await visit('Post-op review');
+      expect(await billOf(review)).toMatchObject({
+        total: 0,
+        needsCharge: true,
+      });
+      await pay(review, { amount: 1500, method: 'Card' }).expect(400);
+      const paid = await pay(review, {
+        amount: 1500,
+        method: 'Card',
+        charge: 1500,
+      }).expect(201);
+      expect(paid.body).toMatchObject({
+        total: 1500,
+        status: 'Paid',
+        needsCharge: false,
+      });
+    });
+
+    it('splits a balance into EMIs and applies payments to them in order', async () => {
+      type Inst = {
+        number: number;
+        dueDate: string;
+        amount: number;
+        paid: number;
+        status: string;
+      };
+      type EmiBill = Bill & { plan: string; installments: Inst[] };
+      const setEmi = (id: string, body: object) =>
+        request(app.getHttpServer())
+          .put(`/api/appointments/${id}/billing/emi`)
+          .set(authed())
+          .send(body);
+
+      const pkg = await request(app.getHttpServer())
+        .post('/api/patients/PT-1083/packages')
+        .set(authed())
+        .send({
+          items: [
+            { treatmentId: 'TO-6', quantity: 2000 },
+            { treatmentId: 'TO-3', gap: { value: 2, unit: 'months' } },
+          ],
+        })
+        .expect(201);
+      const pkgId = (pkg.body as { id: string }).id;
+      const booked = await request(app.getHttpServer())
+        .post(`/api/packages/${pkgId}/sessions/0/appointment`)
+        .set(authed())
+        .send({
+          startsAt: '2027-11-02T09:00:00+05:30',
+          doctor: 'Dr. Bhushan Patil',
+          days: 1,
+        })
+        .expect(201);
+      const surgery = (booked.body as { steps: { appointmentId?: string }[] })
+        .steps[0].appointmentId!;
+
+      // Surgery bill ₹40,000 (2,000 grafts × ₹20): ₹10,000 down, then 3 EMIs of ₹10,000
+      await pay(surgery, { amount: 10000, method: 'Cash' }).expect(201);
+      const dates = ['2027-01-05', '2027-02-05', '2027-03-05'];
+      const plan = (amounts: number[], dueDates = dates) => ({
+        installments: amounts.map((amount, i) => ({
+          amount,
+          dueDate: dueDates[i],
+        })),
+      });
+      await setEmi(surgery, plan([10000, 10000, 9000])).expect(400); // doesn't add up
+      await setEmi(
+        surgery,
+        plan([10000, 10000, 10000], ['2027-02-05', '2027-01-05', '2027-03-05']),
+      ).expect(400); // out of order
+      await setEmi(
+        surgery,
+        plan([10000, 10000, 10000], ['2020-01-05', '2027-01-05', '2027-03-05']),
+      ).expect(400); // past
+      await setEmi(surgery, plan([30000])).expect(400); // needs at least 2
+      const emi = (
+        await setEmi(surgery, plan([10000, 10000, 10000])).expect(200)
+      ).body as EmiBill;
+      expect(emi.plan).toBe('emi');
+      expect(
+        emi.installments.map((i) => `${i.dueDate} ${i.amount} ${i.status}`),
+      ).toEqual([
+        '2027-01-05 10000 Due',
+        '2027-02-05 10000 Upcoming',
+        '2027-03-05 10000 Upcoming',
+      ]);
+
+      // ₹15,000 clears EMI 1 and part-pays EMI 2
+      const after = (
+        await pay(surgery, { amount: 15000, method: 'UPI' }).expect(201)
+      ).body as EmiBill;
+      expect(after.installments.map((i) => `${i.paid} ${i.status}`)).toEqual([
+        '10000 Paid',
+        '5000 Part paid',
+        '0 Upcoming',
+      ]);
+      expect(after).toMatchObject({
+        paid: 25000,
+        balance: 15000,
+        status: 'Partially paid',
+      });
+
+      // Re-plan what's left (₹15,000) as 2 EMIs, then go back to a single payment
+      const replanned = (
+        await setEmi(
+          surgery,
+          plan([7500, 7500], ['2027-04-05', '2027-05-05']),
+        ).expect(200)
+      ).body as EmiBill;
+      expect(
+        replanned.installments.map((i) => `${i.amount} ${i.paid} ${i.status}`),
+      ).toEqual(['7500 0 Due', '7500 0 Upcoming']);
+      const cleared = (
+        await request(app.getHttpServer())
+          .delete(`/api/appointments/${surgery}/billing/emi`)
+          .set(authed())
+          .expect(200)
+      ).body as EmiBill;
+      expect(cleared).toMatchObject({
+        plan: 'full',
+        installments: [],
+        balance: 15000,
+      });
+    });
+
+    it('asks for the charge before planning EMIs on an unpriced visit', async () => {
+      const id = await visit('Post-op review', 'PT-1081');
+      const body = {
+        installments: [
+          { dueDate: '2027-06-01', amount: 1000 },
+          { dueDate: '2027-07-01', amount: 1000 },
+        ],
+      };
+      await request(app.getHttpServer())
+        .put(`/api/appointments/${id}/billing/emi`)
+        .set(authed())
+        .send(body)
+        .expect(400);
+      const ok = await request(app.getHttpServer())
+        .put(`/api/appointments/${id}/billing/emi`)
+        .set(authed())
+        .send({ ...body, charge: 2000 })
+        .expect(200);
+      expect(ok.body).toMatchObject({
+        total: 2000,
+        plan: 'emi',
+        status: 'Pending',
+      });
+    });
+
+    it('gives the Billing page received, pending and upcoming payments', async () => {
+      type Item = {
+        invoiceId: string;
+        amount: number;
+        overdueDays: number;
+        kind: string;
+        emiNumber?: number;
+        dueDate: string;
+      };
+      type Overview = {
+        metrics: Record<string, number>;
+        received: {
+          invoiceId: string;
+          amount: number;
+          method: string;
+          description: string;
+          receivedAt: string;
+        }[];
+        pending: Item[];
+        upcoming: Item[];
+      };
+      const overview = async () =>
+        (
+          await request(app.getHttpServer())
+            .get('/api/billing/overview')
+            .set(authed())
+            .expect(200)
+        ).body as Overview;
+
+      let o = await overview();
+      // Seeded: payments behind the paid invoices, and the unpaid ones as pending (INV-26087 overdue)
+      expect(o.received.find((p) => p.invoiceId === 'INV-26091')).toMatchObject(
+        { amount: 105000, method: 'Bank transfer' },
+      );
+      expect(o.pending.find((p) => p.invoiceId === 'INV-26089')).toMatchObject({
+        amount: 800,
+        kind: 'bill',
+        overdueDays: 0,
+      });
+      expect(
+        o.pending.find((p) => p.invoiceId === 'INV-26087')!.overdueDays,
+      ).toBeGreaterThan(0);
+
+      // Pay part of a seeded invoice from the Billing page (by invoice), then put the rest on EMIs
+      const paid = await request(app.getHttpServer())
+        .post('/api/invoices/INV-26087/payments')
+        .set(authed())
+        .send({ amount: 200, method: 'Cash' })
+        .expect(201);
+      expect(paid.body).toMatchObject({
+        invoiceId: 'INV-26087',
+        status: 'Partially paid',
+        balance: 1000,
+      });
+      await request(app.getHttpServer())
+        .put('/api/invoices/INV-26087/billing/emi')
+        .set(authed())
+        .send({
+          installments: [
+            { dueDate: '2027-01-10', amount: 500 },
+            { dueDate: '2027-02-10', amount: 500 },
+          ],
+        })
+        .expect(200);
+
+      o = await overview();
+      // Future EMIs are upcoming, not pending; the untouched invoice is still pending
+      expect(o.pending.some((p) => p.invoiceId === 'INV-26087')).toBe(false);
+      expect(o.pending.some((p) => p.invoiceId === 'INV-26089')).toBe(true);
+      expect(
+        o.upcoming
+          .filter((u) => u.invoiceId === 'INV-26087')
+          .map((u) => `${u.emiNumber} ${u.dueDate} ${u.amount}`),
+      ).toEqual(['1 2027-01-10 500', '2 2027-02-10 500']);
+      expect(o.received[0]).toMatchObject({
+        invoiceId: 'INV-26087',
+        amount: 200,
+      }); // newest first
+      expect(o.metrics.receivedToday).toBeGreaterThanOrEqual(200);
+    });
+
+    it('bills each package visit on its own: its step price, ₹0 when free or waived', async () => {
+      const patient = await request(app.getHttpServer())
+        .post('/api/patients')
+        .set(authed())
+        .send({ name: 'Billing Plan', phone: '+91 90000 55501' })
+        .expect(201);
+      const patientId = (patient.body as { id: string }).id;
+      const pkg = await request(app.getHttpServer())
+        .post(`/api/patients/${patientId}/packages`)
+        .set(authed())
+        .send({
+          items: [
+            { treatmentId: 'TO-6', quantity: 2000 },
+            { treatmentId: 'TO-3', gap: { value: 2, unit: 'months' } },
+            {
+              treatmentId: 'TO-3',
+              gap: { value: 2, unit: 'months' },
+              complimentary: true,
+            },
+            {
+              treatmentId: 'TO-7',
+              gap: { value: 7, unit: 'days' },
+              unitPrice: 0,
+            },
+          ],
+        })
+        .expect(201);
+      const pkgId = (pkg.body as { id: string }).id;
+      const booked = await request(app.getHttpServer())
+        .post(`/api/packages/${pkgId}/sessions/0/appointment`)
+        .set(authed())
+        .send({
+          startsAt: '2027-02-12T09:00:00+05:30',
+          doctor: 'Dr. Bhushan Patil',
+          days: 1,
+        })
+        .expect(201);
+      const surgery = (booked.body as { steps: { appointmentId?: string }[] })
+        .steps[0].appointmentId!;
+      const book = async (type: string, startsAt: string) =>
+        (
+          (
+            await request(app.getHttpServer())
+              .post('/api/appointments')
+              .set(authed())
+              .send({ patientId, type, doctor: 'Dr. Bhushan Patil', startsAt })
+              .expect(201)
+          ).body as { id: string }
+        ).id;
+
+      const paidPrp = await book('PRP session', '2027-04-12T10:00:00+05:30');
+      const freePrp = await book('PRP session', '2027-06-12T10:00:00+05:30');
+      const roller = await book('Derma roller', '2027-06-19T10:00:00+05:30');
+
+      expect(await billOf(surgery)).toMatchObject({
+        source: 'package',
+        packageId: pkgId,
+        total: 40000,
+        balance: 40000,
+      });
+      expect(await billOf(paidPrp)).toMatchObject({
+        source: 'package',
+        total: 4500,
+      });
+      const prpPaid = await pay(paidPrp, {
+        amount: 4500,
+        method: 'UPI',
+      }).expect(201);
+      expect(prpPaid.body).toMatchObject({ status: 'Paid', balance: 0 });
+      expect(await billOf(surgery)).toMatchObject({ paid: 0, balance: 40000 });
+
+      for (const id of [freePrp, roller]) {
+        expect(await billOf(id)).toMatchObject({
+          total: 0,
+          complimentary: true,
+          needsCharge: false,
+        });
+        await pay(id, { amount: 100, method: 'Cash' }).expect(400);
+      }
+    });
+  });
+
+  it('builds the dashboard from live records', async () => {
+    type Summary = {
+      today: string;
+      patients: { total: number; newThisMonth: number };
+      appointmentsToday: { total: number; scheduled: number };
+      revenue: { thisMonth: number; today: number; billedThisMonth: number };
+      prpSessions: { thisMonth: number };
+      treatmentMix: {
+        total: number;
+        prp: number;
+        transplant: number;
+        consultation: number;
+        other: number;
+      };
+    };
+    const summary = async () =>
+      (
+        await request(app.getHttpServer())
+          .get('/api/dashboard/summary')
+          .set(authed())
+          .expect(200)
+      ).body as Summary;
+    const before = await summary();
+    const mix = before.treatmentMix;
+    expect(mix.prp + mix.transplant + mix.consultation + mix.other).toBe(
+      mix.total,
+    );
+
+    // A new patient booked for a PRP session later today…
+    const booked = await request(app.getHttpServer())
+      .post('/api/appointments')
+      .set(authed())
+      .send({
+        newPatient: { name: 'Dashboard Check', phone: '+91 90000 55555' },
+        type: 'PRP session',
+        doctor: 'Dr. Bhushan Patil',
+        startsAt: `${before.today}T18:30:00+05:30`,
+      })
+      .expect(201);
+    const id = (booked.body as { id: string }).id;
+    let after = await summary();
+    expect(after.patients.total).toBe(before.patients.total + 1);
+    expect(after.patients.newThisMonth).toBe(before.patients.newThisMonth + 1);
+    expect(after.appointmentsToday.total).toBe(
+      before.appointmentsToday.total + 1,
+    );
+    expect(after.appointmentsToday.scheduled).toBe(
+      before.appointmentsToday.scheduled + 1,
+    );
+    expect(after.prpSessions.thisMonth).toBe(before.prpSessions.thisMonth + 1);
+    expect(after.treatmentMix.prp).toBe(before.treatmentMix.prp + 1);
+
+    // …who pays for it
+    await request(app.getHttpServer())
+      .post(`/api/appointments/${id}/payments`)
+      .set(authed())
+      .send({ amount: 4500, method: 'Cash' })
+      .expect(201);
+    after = await summary();
+    expect(after.revenue.thisMonth).toBe(before.revenue.thisMonth + 4500);
+    expect(after.revenue.today).toBe(before.revenue.today + 4500);
+    expect(after.revenue.billedThisMonth).toBe(
+      before.revenue.billedThisMonth + 4500,
+    );
+
+    // Check-in and completion show up in today's counts
+    await request(app.getHttpServer())
+      .post(`/api/appointments/${id}/check-in`)
+      .set(authed())
+      .expect(200);
+    after = await summary();
+    expect(after.appointmentsToday.scheduled).toBe(
+      before.appointmentsToday.scheduled,
+    );
+    await request(app.getHttpServer())
+      .post(`/api/appointments/${id}/complete`)
+      .set(authed())
+      .expect(200);
+    after = await summary();
+    expect(after.prpSessions.thisMonth).toBe(before.prpSessions.thisMonth + 1);
   });
 
   it('has no patient status field any more', async () => {

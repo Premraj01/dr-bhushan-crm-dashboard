@@ -1,26 +1,100 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import {
-  APPOINTMENT_RESCHEDULED,
+  APPOINTMENT_BOOKED,
+  APPOINTMENT_COMPLETED,
   type Appointment,
+  type AppointmentStatus,
 } from '../appointments/appointment.entity';
-import { AppointmentsService } from '../appointments/appointments.service';
+import {
+  AppointmentsService,
+  spanOf,
+} from '../appointments/appointments.service';
 import { AuthUser } from '../auth/auth-user';
 import { TreatmentOption } from '../catalog/catalog.entity';
 import { TreatmentCatalogService } from '../catalog/catalog.service';
 import { CrudService } from '../common/crud.service';
-import { addMonths, clinicDate, clinicDateTimeToIso } from '../common/dates';
+import { addDays, clinicDate } from '../common/dates';
 import { PatientsService } from '../patients/patients.service';
+import { PlansService } from '../plans/plans.service';
+import { addGap, expandPlan, normalizeItems } from '../plans/plan-steps';
+import { BookSessionDto } from './dto/book-session.dto';
 import { CreatePackageDto } from './dto/create-package.dto';
 import {
   PackageLine,
   PackageStatus,
   PackageStep,
-  StepKind,
   TreatmentPackage,
 } from './package.entity';
 
-const grafts = new Intl.NumberFormat('en-IN');
+const count = new Intl.NumberFormat('en-IN');
+
+/** A package whose surgery still needs a slot — shown under "Pending bookings". */
+export interface PendingBooking {
+  packageId: string;
+  patientId: string;
+  patientName: string;
+  status: PackageStatus;
+  /** When the package was created (how long it has been waiting). */
+  createdAt: string;
+  createdBy: string;
+  /** Step index of the surgery. */
+  stepIndex: number;
+  /** e.g. "FUE hair transplant · 2,500 grafts". */
+  surgery: string;
+  /** The surgery was booked but the patient didn't come — it needs a new slot. */
+  missed: boolean;
+}
+
+/**
+ * done: visit completed · in-clinic: checked in now · booked: has a slot ·
+ * missed: its visit was missed · to-book: no visit yet.
+ */
+export type StepState = 'done' | 'in-clinic' | 'booked' | 'missed' | 'to-book';
+
+export interface StepView extends PackageStep {
+  index: number;
+  state: StepState;
+  /** First day of the booked (or completed) visit. */
+  date?: string;
+  appointmentStatus?: AppointmentStatus;
+  /** Previous visit's procedure day + gap; the package start date for the first step. */
+  dueDate: string;
+  windowStart: string;
+  windowEnd: string;
+  /** The previous visit hasn't happened yet, so this date will move with it. */
+  estimated: boolean;
+}
+
+/** A package as the API returns it: its steps with live state and due dates. */
+export type PackageView = Omit<TreatmentPackage, 'steps'> & {
+  steps: StepView[];
+  progress: { done: number; total: number };
+  /** First step still needing a slot (never booked, or missed); null when none. */
+  next: number | null;
+};
+
+/** A plan step that has come due — the front desk's reminder list. */
+export interface DueReminder {
+  packageId: string;
+  packageName: string;
+  patientId: string;
+  patientName: string;
+  phone?: string;
+  stepIndex: number;
+  treatment: string;
+  cycle?: { n: number; of: number };
+  dueDate: string;
+  windowStart: string;
+  windowEnd: string;
+  /** Days past the end of the window (0 when not overdue). */
+  overdueDays: number;
+  missed: boolean;
+}
 
 @Injectable()
 export class PackagesService extends CrudService<TreatmentPackage> {
@@ -29,243 +103,401 @@ export class PackagesService extends CrudService<TreatmentPackage> {
     private readonly patients: PatientsService,
     private readonly catalog: TreatmentCatalogService,
     private readonly appointments: AppointmentsService,
+    private readonly plans: PlansService,
   ) {
     super(events, 'package', 'PKG-', []);
   }
 
-  forPatient(patientId: string): TreatmentPackage[] {
+  forPatient(patientId: string): PackageView[] {
     this.patients.findOne(patientId);
     return this.findAll()
       .filter((p) => p.patientId === patientId)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((p) => this.view(p));
+  }
+
+  /** Surgeries waiting for a slot: never booked, or booked and missed. */
+  pendingQueue(): PendingBooking[] {
+    return this.findAll()
+      .filter((p) => p.status === 'Accepted')
+      .map((pkg): PendingBooking | null => {
+        const step = this.view(pkg).steps.find(
+          (s) => s.surgery && (s.state === 'to-book' || s.state === 'missed'),
+        );
+        if (!step) return null;
+        return {
+          packageId: pkg.id,
+          patientId: pkg.patientId,
+          patientName: pkg.patientName,
+          status: pkg.status,
+          createdAt: pkg.createdAt,
+          createdBy: pkg.createdBy.name,
+          stepIndex: step.index,
+          surgery: step.description,
+          missed: step.state === 'missed',
+        };
+      })
+      .filter((p): p is PendingBooking => p !== null)
+      .sort(
+        (a, b) =>
+          Number(b.missed) - Number(a.missed) ||
+          a.createdAt.localeCompare(b.createdAt),
+      );
   }
 
   /**
-   * Prices a package from Settings → Treatments:
-   *  - PRP: sessions × the PRP session price
-   *  - FUE: grafts × price per graft (overridable per package), plus the
-   *    transplant's complimentary PRP sessions at ₹0
+   * Reminders: for each active package, the next visit to book once the one before it
+   * is done — shown from `withinDays` before its due date. Surgery is in pendingQueue.
+   */
+  dueReminders(withinDays = 7): DueReminder[] {
+    const today = clinicDate();
+    const horizon = addDays(today, withinDays);
+    const out: DueReminder[] = [];
+    for (const pkg of this.findAll().filter((p) => p.status === 'Accepted')) {
+      const { steps } = this.view(pkg);
+      const step = steps.find(
+        (s) => s.state === 'to-book' || s.state === 'missed',
+      );
+      if (!step || step.surgery) continue;
+      const before = steps[step.index - 1];
+      if (before && before.state !== 'done' && before.state !== 'in-clinic')
+        continue;
+      if (step.windowStart > horizon) continue;
+      const patient = this.patients
+        .findAll()
+        .find((p) => p.id === pkg.patientId);
+      out.push({
+        packageId: pkg.id,
+        packageName: pkg.name,
+        patientId: pkg.patientId,
+        patientName: pkg.patientName,
+        ...(patient?.phone && { phone: patient.phone }),
+        stepIndex: step.index,
+        treatment: step.description,
+        ...(step.cycle && { cycle: step.cycle }),
+        dueDate: step.dueDate,
+        windowStart: step.windowStart,
+        windowEnd: step.windowEnd,
+        overdueDays: Math.max(0, daysBetween(step.windowEnd, today)),
+        missed: step.state === 'missed',
+      });
+    }
+    return out.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  }
+
+  /**
+   * Prices a plan for a patient and projects its dates from `startDate`. Each step is
+   * priced from Settings unless the doctor set a price (0 waives it) or marked it free.
    */
   quote(
     dto: CreatePackageDto,
+    { strict = false } = {},
   ): Pick<
-    TreatmentPackage,
-    | 'lines'
-    | 'prpSessions'
-    | 'grafts'
-    | 'total'
-    | 'startDate'
-    | 'intervalMonths'
-    | 'schedule'
+    PackageView,
+    'name' | 'startDate' | 'items' | 'steps' | 'lines' | 'total'
   > {
-    const lines: PackageLine[] = [];
-    const prp = this.catalog.prpSession();
-    const paidPrp = dto.prpSessions ?? 0;
-    let freePrp = 0;
-
-    if (paidPrp > 0) {
-      if (!prp)
+    const plan = dto.planId ? this.plans.findOne(dto.planId) : undefined;
+    const items = normalizeItems(dto.items, (id) => this.treatment(id));
+    const steps = expandPlan(items).map((s): PackageStep => {
+      const t = this.treatment(s.treatmentId)!;
+      const graft = t.pricingUnit === 'graft';
+      if (strict && graft && !s.quantity) {
         throw new BadRequestException(
-          'Add an active per-session PRP treatment in Settings first',
+          `Enter the number of grafts for ${t.name}`,
         );
-      lines.push({
-        treatmentOptionId: prp.id,
-        description: prp.name,
-        unit: 'session',
-        quantity: paidPrp,
-        unitPrice: prp.price,
-        amount: paidPrp * prp.price,
-        complimentary: false,
-      });
-    }
-
-    if (dto.transplant) {
-      const fue = this.catalog.graftTransplant();
-      if (!fue)
-        throw new BadRequestException(
-          'Add an active per-graft transplant treatment in Settings first',
-        );
-      const unitPrice = dto.transplant.pricePerGraft ?? fue.price;
-      lines.push({
-        treatmentOptionId: fue.id,
-        description: `${fue.name} · ${grafts.format(dto.transplant.grafts)} grafts`,
-        unit: 'graft',
-        quantity: dto.transplant.grafts,
-        unitPrice,
-        amount: dto.transplant.grafts * unitPrice,
-        complimentary: false,
-      });
-      freePrp = fue.complimentaryPrpSessions ?? 0;
-      if (freePrp > 0 && prp) {
-        lines.push({
-          treatmentOptionId: prp.id,
-          description: `${prp.name} · complimentary with transplant`,
-          unit: 'session',
-          quantity: freePrp,
-          unitPrice: prp.price,
-          amount: 0,
-          complimentary: true,
-        });
       }
-    }
-
-    if (lines.length === 0) {
-      throw new BadRequestException(
-        'A package needs PRP sessions, a hair transplant, or both',
-      );
-    }
+      const quantity = s.quantity ?? (graft ? 0 : 1);
+      const unitPrice = s.unitPrice ?? t.price;
+      const complimentary = s.complimentary ?? false;
+      return {
+        treatmentId: t.id,
+        description: graft
+          ? `${t.name} · ${quantity ? `${count.format(quantity)} grafts` : 'grafts to be set'}`
+          : t.name,
+        unit: t.pricingUnit,
+        quantity,
+        unitPrice,
+        amount: complimentary ? 0 : quantity * unitPrice,
+        complimentary,
+        surgery: t.surgical === true,
+        gap: s.gap,
+        windowDays: s.windowDays ?? 0,
+        ...(s.cycle && { cycle: s.cycle }),
+        ...(s.note && { note: s.note }),
+      };
+    });
+    const lines = summarizeLines(steps);
     const startDate = dto.startDate ?? clinicDate();
-    const intervalMonths = dto.intervalMonths ?? 3;
-    const transplantLine = lines.find((l) => l.unit === 'graft');
     return {
-      lines,
-      prpSessions: paidPrp + freePrp,
-      ...(dto.transplant && { grafts: dto.transplant.grafts }),
-      total: lines.reduce((sum, l) => sum + l.amount, 0),
+      name: dto.name?.trim() || plan?.name || 'Custom plan',
       startDate,
-      intervalMonths,
-      schedule: buildSchedule({
-        sequence: dto.sequence,
-        paidPrp,
-        freePrp: prp ? freePrp : 0,
-        prpName: prp?.name ?? 'PRP session',
-        transplant: transplantLine?.description,
-        startDate,
-        intervalMonths,
-      }),
+      items,
+      steps: this.schedule(steps, startDate),
+      lines,
+      total: lines.reduce((sum, l) => sum + l.amount, 0),
     };
   }
 
-  /** Saves the package and books every session in the appointment calendar. */
+  /** Saves the package (accepted straight away). Visits are booked later from the calendar. */
   create(
     patientId: string,
     dto: CreatePackageDto,
     user: AuthUser,
-  ): TreatmentPackage {
+  ): PackageView {
     const patient = this.patients.findOne(patientId);
-    const quote = this.quote(dto);
-    const sessionTime = dto.sessionTime ?? '10:00';
-    const doctor = dto.doctor ?? user.name;
+    const quote = this.quote(dto, { strict: true });
     const pkg = this.insert({
-      ...quote,
-      sessionTime,
-      doctor,
       patientId,
       patientName: patient.name,
-      status: 'Proposed',
+      name: quote.name,
+      ...(dto.planId && { planId: dto.planId }),
+      startDate: quote.startDate,
+      items: quote.items,
+      steps: quote.steps.map((s) => stored(s)),
+      lines: quote.lines,
+      total: quote.total,
+      status: 'Accepted',
       ...(dto.notes && { notes: dto.notes }),
       createdBy: { id: user.id, name: user.name, role: user.role },
     });
+    this.patients.update(patientId, { treatment: `Package · ${pkg.name}` });
+    return this.view(pkg);
+  }
 
-    const prp = this.catalog.prpSession();
-    const fue = this.catalog.graftTransplant();
-    const schedule = pkg.schedule.map((step) => {
-      const appointment = this.appointments.createForPackage({
-        patientId,
-        patientName: patient.name,
-        type: step.description,
-        doctor,
-        startsAt: clinicDateTimeToIso(step.date, sessionTime),
-        durationMinutes: slotMinutes(step.kind === 'transplant' ? fue : prp),
-        status: 'Scheduled',
-        notes: `Package ${pkg.id}`,
-        packageId: pkg.id,
+  /** Books step `index` into the calendar (or re-books it after a missed visit). */
+  bookSession(id: string, index: number, dto: BookSessionDto): PackageView {
+    const pkg = this.findOne(id);
+    if (pkg.status !== 'Accepted')
+      throw new BadRequestException(
+        `This package is ${pkg.status.toLowerCase()}`,
+      );
+    const step = pkg.steps[index];
+    if (!step) throw new BadRequestException(`${pkg.id} has no step ${index}`);
+    const option = this.treatment(step.treatmentId);
+    const days = step.surgery ? (dto.days ?? option?.duration ?? 1) : undefined;
+    const existing = step.appointmentId
+      ? this.appointmentOf(step.appointmentId)
+      : undefined;
+    if (existing && existing.status !== 'Missed') {
+      throw new ConflictException(
+        `${step.description} is already booked; reschedule it from the calendar instead`,
+      );
+    }
+
+    let appointment: Appointment;
+    if (existing) {
+      // Missed visit: move the same appointment to the new slot (it becomes Rescheduled).
+      appointment = this.appointments.update(existing.id, {
+        startsAt: dto.startsAt,
+        doctor: dto.doctor,
+        ...(days !== undefined && { days }),
+        ...(dto.notes && { notes: dto.notes }),
       });
-      return { ...step, appointmentId: appointment.id };
-    });
-    const saved = this.update(pkg.id, { schedule });
-    this.patients.update(patientId, { treatment: summarize(saved) });
-    return saved;
+    } else {
+      appointment = this.appointments.createForPackage({
+        patientId: pkg.patientId,
+        patientName: pkg.patientName,
+        type: step.description,
+        doctor: dto.doctor,
+        startsAt: new Date(dto.startsAt).toISOString(),
+        durationMinutes: slotMinutes(option),
+        ...(days !== undefined && { days }),
+        status: 'Scheduled',
+        notes: dto.notes ?? `Package ${pkg.id}`,
+        packageId: pkg.id,
+        packageStep: index,
+      });
+    }
+    return this.view(this.setAppointment(pkg, index, appointment.id));
   }
 
-  /** Rescheduling a session in the calendar moves it in the package schedule too. */
-  @OnEvent(APPOINTMENT_RESCHEDULED)
-  onAppointmentRescheduled(appointment: Appointment) {
-    const pkg = this.findAll().find((p) => p.id === appointment.packageId);
-    if (!pkg) return;
-    const date = clinicDate(appointment.startsAt);
-    const schedule = pkg.schedule.map((step) =>
-      step.appointmentId === appointment.id ? { ...step, date } : step,
-    );
-    this.update(pkg.id, { schedule });
+  /**
+   * A visit booked for a treatment in the patient's plan takes the first step of that
+   * treatment still needing a slot (oldest package first). A missed visit gives its
+   * step up to the new booking.
+   */
+  @OnEvent(APPOINTMENT_BOOKED)
+  onAppointmentBooked(appointment: Appointment) {
+    if (!appointment.patientId || appointment.packageId) return;
+    const type = appointment.type.trim().toLowerCase();
+    for (const pkg of this.activeFor(appointment.patientId)) {
+      const step = this.view(pkg).steps.find(
+        (s) =>
+          (s.state === 'to-book' || s.state === 'missed') &&
+          (this.treatment(s.treatmentId)?.name.toLowerCase() === type ||
+            s.description.toLowerCase() === type),
+      );
+      if (!step) continue;
+      if (step.appointmentId)
+        this.appointments.linkToPackage(step.appointmentId, null, null);
+      this.appointments.linkToPackage(appointment.id, pkg.id, step.index);
+      this.setAppointment(pkg, step.index, appointment.id);
+      return;
+    }
   }
 
-  /** Cancelling a package removes its upcoming sessions from the calendar. */
-  setStatus(id: string, status: PackageStatus): TreatmentPackage {
+  /** A package whose every step is done becomes Completed. */
+  @OnEvent(APPOINTMENT_COMPLETED)
+  onAppointmentCompleted(appointment: Appointment) {
+    const pkg = appointment.packageId
+      ? this.findAll().find((p) => p.id === appointment.packageId)
+      : undefined;
+    if (!pkg || pkg.status !== 'Accepted') return;
+    if (this.view(pkg).steps.every((s) => s.state === 'done'))
+      this.update(pkg.id, { status: 'Completed' });
+  }
+
+  /** Cancelling a package removes its visits that haven't happened yet. */
+  setStatus(id: string, status: PackageStatus): PackageView {
     const pkg = this.update(id, { status });
     if (status === 'Cancelled') this.appointments.removeUpcomingForPackage(id);
-    return pkg;
+    return this.view(pkg);
   }
-}
 
-/** Short plan label for the patient list, e.g. "Package · FUE 2,500 grafts + 6 PRP". */
-function summarize(pkg: TreatmentPackage): string {
-  const parts = [
-    pkg.grafts ? `FUE ${grafts.format(pkg.grafts)} grafts` : null,
-    pkg.prpSessions ? `${pkg.prpSessions} PRP` : null,
-  ].filter(Boolean);
-  return `Package · ${parts.join(' + ')}`;
-}
-
-/**
- * Lays sessions out `intervalMonths` apart from the start date, in the given order
- * (default: transplant, then its complimentary PRP, then paid PRP).
- */
-function buildSchedule(opts: {
-  sequence: StepKind[] | undefined;
-  paidPrp: number;
-  freePrp: number;
-  prpName: string;
-  transplant: string | undefined;
-  startDate: string;
-  intervalMonths: number;
-}): PackageStep[] {
-  const counts: Record<StepKind, number> = {
-    transplant: opts.transplant ? 1 : 0,
-    'prp-free': opts.freePrp,
-    prp: opts.paidPrp,
-  };
-  const defaultOrder = (Object.keys(counts) as StepKind[]).flatMap((kind) =>
-    Array<StepKind>(counts[kind]).fill(kind),
-  );
-  const order = opts.sequence ?? defaultOrder;
-  const given = order.reduce<Record<string, number>>(
-    (acc, k) => ({ ...acc, [k]: (acc[k] ?? 0) + 1 }),
-    {},
-  );
-  if (
-    (Object.keys(counts) as StepKind[]).some(
-      (k) => (given[k] ?? 0) !== counts[k],
-    )
-  ) {
-    throw new BadRequestException(
-      `sequence must list each session exactly once: ${counts.transplant} transplant, ${counts.prp} PRP, ${counts['prp-free']} complimentary PRP`,
+  /** Package with each step's state and due date, as the API returns it. */
+  view(pkg: TreatmentPackage): PackageView {
+    const steps = this.schedule(pkg.steps, pkg.startDate);
+    const done = steps.filter((s) => s.state === 'done').length;
+    const next = steps.find(
+      (s) => s.state === 'to-book' || s.state === 'missed',
     );
+    return {
+      ...pkg,
+      steps,
+      progress: { done, total: steps.length },
+      next: next?.index ?? null,
+    };
   }
 
-  const seen: Record<StepKind, number> = {
-    prp: 0,
-    transplant: 0,
-    'prp-free': 0,
-  };
-  return order.map((kind, i) => {
-    const n = ++seen[kind];
-    const description =
-      kind === 'transplant'
-        ? opts.transplant!
-        : kind === 'prp'
-          ? `${opts.prpName} ${n} of ${counts.prp}`
-          : `${opts.prpName} ${n} of ${counts['prp-free']} · complimentary`;
-    return {
-      kind,
-      description,
-      date: addMonths(opts.startDate, i * opts.intervalMonths),
-      complimentary: kind === 'prp-free',
-    };
-  });
+  /* ---------- helpers ---------- */
+
+  /**
+   * Due dates, in order: the first step is due on the start date; each later step is due
+   * `gap` after the previous visit's procedure day (its last day, for multi-day surgery).
+   * Until that visit happens, its booked day — or its own due date — stands in, so the
+   * rest of the plan moves with it.
+   */
+  private schedule(steps: PackageStep[], startDate: string): StepView[] {
+    const today = clinicDate();
+    let anchor = startDate;
+    let actual = true;
+    return steps.map((step, index) => {
+      const dueDate =
+        index === 0 || !step.gap ? anchor : addGap(anchor, step.gap);
+      const estimated = index > 0 && !actual;
+      const visit = step.appointmentId
+        ? this.appointmentOf(step.appointmentId)
+        : undefined;
+      const state: StepState = !visit
+        ? 'to-book'
+        : visit.status === 'Completed'
+          ? 'done'
+          : visit.status === 'Checked in'
+            ? 'in-clinic'
+            : visit.status === 'Missed'
+              ? 'missed'
+              : 'booked';
+      if (visit && state !== 'missed') {
+        anchor = spanOf(visit).last;
+        actual = state === 'done' || state === 'in-clinic';
+      } else {
+        // Not booked (or missed): the next step can't come before today.
+        anchor = dueDate < today ? today : dueDate;
+        actual = false;
+      }
+      return {
+        ...step,
+        index,
+        state,
+        ...(visit && {
+          date: clinicDate(visit.startsAt),
+          appointmentStatus: visit.status,
+        }),
+        dueDate,
+        windowStart: addDays(dueDate, -step.windowDays),
+        windowEnd: addDays(dueDate, step.windowDays),
+        estimated,
+      };
+    });
+  }
+
+  private setAppointment(
+    pkg: TreatmentPackage,
+    index: number,
+    appointmentId: string,
+  ): TreatmentPackage {
+    const steps = pkg.steps.map((s, i) =>
+      i === index ? { ...s, appointmentId } : s,
+    );
+    return this.update(pkg.id, { steps });
+  }
+
+  private activeFor(patientId: string): TreatmentPackage[] {
+    return this.findAll()
+      .filter((p) => p.patientId === patientId && p.status === 'Accepted')
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+
+  private treatment(id: string): TreatmentOption | undefined {
+    return this.catalog.findAll().find((t) => t.id === id);
+  }
+
+  private appointmentOf(id: string): Appointment | undefined {
+    return this.appointments.findAll().find((a) => a.id === id);
+  }
 }
 
-/** Calendar slot for a session: the treatment's duration, capped at a full clinic day. */
+/** The stored part of a step (drops the computed view fields). */
+function stored(s: StepView): PackageStep {
+  const {
+    index: _index,
+    state: _state,
+    date: _date,
+    appointmentStatus: _status,
+    dueDate: _due,
+    windowStart: _ws,
+    windowEnd: _we,
+    estimated: _est,
+    ...step
+  } = s;
+  return step;
+}
+
+/** Groups steps of the same treatment and price into price lines. */
+function summarizeLines(steps: PackageStep[]): PackageLine[] {
+  const lines = new Map<string, PackageLine>();
+  for (const s of steps) {
+    const key = `${s.treatmentId}|${s.unitPrice}|${s.complimentary}|${s.unit === 'graft' ? s.quantity : ''}`;
+    const line = lines.get(key);
+    if (line) {
+      line.quantity += s.quantity;
+      line.amount += s.amount;
+      continue;
+    }
+    lines.set(key, {
+      treatmentOptionId: s.treatmentId,
+      description: s.complimentary
+        ? `${s.description} · complimentary`
+        : s.description,
+      unit: s.unit,
+      quantity: s.quantity,
+      unitPrice: s.unitPrice,
+      amount: s.amount,
+      complimentary: s.complimentary,
+    });
+  }
+  return [...lines.values()];
+}
+
+/** Whole days from `from` to `to` (YYYY-MM-DD). */
+function daysBetween(from: string, to: string): number {
+  return Math.round(
+    (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) /
+      86_400_000,
+  );
+}
+
+/** Daily slot for a session: the treatment's duration, capped at a full clinic day. */
 function slotMinutes(option: TreatmentOption | undefined): number {
   if (!option) return 45;
   const upper = option.durationMax ?? option.duration;

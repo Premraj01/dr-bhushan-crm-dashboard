@@ -1,6 +1,11 @@
 import { Entity } from '../common/entity';
 
-export const TREATMENT_TYPES = ['PRP', 'Transplant', 'Consultation'] as const;
+export const TREATMENT_TYPES = [
+  'PRP',
+  'Transplant',
+  'Consultation',
+  'Scalp therapy',
+] as const;
 export const TREATMENT_STATUSES = [
   'Active',
   'Recovery',

@@ -192,7 +192,9 @@ main{max-width:1540px;margin:0 auto;padding:29px 30px 42px}.page-header{display:
 .package-summary h4{margin:0;font-size:13px}
 .package-summary-for{margin:0 0 4px;color:var(--muted-foreground);font-size:10px}
 .package-sessions{margin:0;color:var(--muted-foreground);font-size:10px}
-.package-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
+.package-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:6px}
+/* The summary column is narrow; let the buttons share or take a full row instead of overflowing. */
+.package-actions>button{flex:1 1 auto}
 @media (max-width:760px){.package-builder{grid-template-columns:1fr}.package-summary{position:static}}
 .duration-field{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 14px;margin:0;border:0;padding:0;min-width:0}
 .duration-field legend{margin-bottom:8px;padding:0;color:var(--foreground);font:700 11px var(--font-heading)}
@@ -227,7 +229,6 @@ button.agenda-row{width:100%;border-width:0 0 1px;border-style:solid;border-colo
 button.agenda-row:last-child{border-bottom:0}
 button.agenda-row:hover:not(:disabled){background:color-mix(in oklab,var(--teal-soft) 50%,transparent)}
 button.agenda-row:disabled{cursor:default}
-.agenda-row.no-show strong,.agenda-row.no-show time{opacity:.6}
 .agenda-row .status-chip{display:inline-flex}
 .agenda-pkg{display:inline-block!important;margin:0 0 0 8px!important;border:1px solid var(--border);border-radius:99px;background:var(--teal-soft);padding:1px 7px;color:var(--primary)!important;font:700 9px var(--font-heading)!important;vertical-align:1px;text-decoration:none}
 
@@ -260,3 +261,266 @@ button.agenda-row:disabled{cursor:default}
 .picker-trigger.locked{cursor:default;background:var(--secondary)}
 .booking-footer{flex-wrap:wrap}
 @media (max-width:760px){.booking-footer .mr-auto{margin-right:0;order:3;width:100%}}
+
+/* Package card progress, pending timeline entries */
+.package-progress{margin:8px 0 0;color:var(--muted-foreground);font-size:10px}
+.timeline i.tl-pending{background:var(--card);box-shadow:inset 0 0 0 1.5px var(--muted-foreground);opacity:.7}
+
+/* Surgery days: theatre blocked, OPD open */
+.calendar-grid button.surgery-day:not(.selected){background:repeating-linear-gradient(135deg,var(--warning-soft) 0 5px,color-mix(in oklab,var(--warning-soft) 45%,var(--card)) 5px 10px);box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--warning) 40%,transparent);color:var(--warning);font-weight:700}
+.calendar-grid button.surgery-day.today:not(.selected){box-shadow:inset 0 0 0 1.5px var(--primary)}
+.key-surgery{background:repeating-linear-gradient(135deg,var(--warning) 0 2px,var(--warning-soft) 2px 4px)}
+.surgery-day-note{display:flex;align-items:flex-start;gap:10px;margin:12px 18px 0;border:1px solid color-mix(in oklab,var(--warning) 35%,var(--border));border-radius:5px;background:var(--warning-soft);padding:10px 12px;color:var(--warning)}
+.surgery-day-note svg{width:16px;flex-shrink:0;margin-top:1px}
+.surgery-day-note p{margin:0}
+.surgery-day-note strong,.surgery-day-note span{display:block}
+.surgery-day-note strong{font-size:11px}
+.surgery-day-note span{margin-top:2px;color:var(--foreground);font-size:10px}
+.calendar-key{flex-wrap:wrap}
+
+/* Pending-booking queue (dashboard + appointments) */
+.pending-queue{margin-bottom:16px}
+.pending-list{display:flex;flex-direction:column;gap:6px;margin:0;padding:12px 18px 14px;list-style:none}
+.pending-row{display:grid;grid-template-columns:22px 34px minmax(0,1fr) auto auto;align-items:center;gap:10px;border:1px solid var(--border);border-radius:5px;background:var(--card);padding:8px 8px 8px 10px}
+.pending-row.surgery{border-color:color-mix(in oklab,var(--warning) 45%,var(--border));background:color-mix(in oklab,var(--warning-soft) 40%,var(--card))}
+.pending-rank{color:var(--muted-foreground);font:700 10px var(--font-heading);text-align:center}
+.pending-avatar{display:grid;width:34px;height:34px;place-items:center;border-radius:4px;background:var(--teal-soft);color:var(--primary);font:700 10px var(--font-heading)}
+.pending-row strong,.pending-row small{display:block}
+.pending-row strong{font-size:12px}
+.pending-row small{overflow:hidden;margin-top:3px;color:var(--muted-foreground);font-size:10px;text-overflow:ellipsis;white-space:nowrap}
+.pending-row .overdue{color:var(--destructive);font-weight:700}
+.pending-chips{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
+.pending-chips .status-chip{display:inline-flex}
+.pending-empty{display:flex;align-items:center;gap:8px;margin:0;padding:14px 18px;color:var(--muted-foreground);font-size:11px}
+.pending-empty svg{width:16px;color:var(--success)}
+@media (max-width:760px){.pending-row{grid-template-columns:34px minmax(0,1fr) auto}.pending-rank,.pending-chips{display:none}}
+
+/* Day panel → schedule a surgery on the selected date */
+.day-surgery-picker{display:flex;flex-direction:column;gap:10px;margin:12px 18px 0;border:1px solid color-mix(in oklab,var(--success) 40%,var(--border));border-radius:5px;background:color-mix(in oklab,var(--success-soft) 45%,var(--card));padding:12px}
+.day-surgery-picker p{margin:0}
+.day-surgery-picker strong,.day-surgery-picker span{display:block}
+.day-surgery-picker strong{font-size:12px}
+.day-surgery-picker span{margin-top:3px;color:var(--muted-foreground);font-size:10px}
+.day-surgery-controls{display:flex;flex-wrap:wrap;gap:8px}
+.day-surgery-controls select{min-height:40px;min-width:0;flex:1 1 240px;border:1px solid var(--input);border-radius:5px;background:var(--background);padding:8px 10px;color:var(--foreground);font-size:12px;outline:0}
+.day-surgery-controls select:focus{border-color:var(--ring)}
+
+/* Appointment → Receive payment → Billing */
+.receive-payment-cta{display:flex;width:100%;align-items:center;gap:12px;margin-top:16px;border:1px solid color-mix(in oklab,var(--success) 45%,var(--border));border-radius:6px;background:color-mix(in oklab,var(--success-soft) 50%,var(--card));padding:12px 14px;color:var(--foreground);text-align:left;cursor:pointer;transition:background .2s,border-color .2s}
+.receive-payment-cta:hover{border-color:var(--success);background:var(--success-soft)}
+.receive-payment-cta:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in oklab,var(--success) 25%,transparent)}
+.receive-payment-cta>svg:first-child{width:20px;flex-shrink:0;color:var(--success)}
+.receive-payment-cta>svg:last-child{width:16px;margin-left:auto;color:var(--muted-foreground)}
+.receive-payment-cta strong,.receive-payment-cta small{display:block}
+.receive-payment-cta strong{font-size:13px}
+.receive-payment-cta small{margin-top:2px;color:var(--muted-foreground);font-size:10px}
+.billing-section{display:flex;flex-direction:column;gap:14px;margin-top:8px}
+.billing-back{align-self:flex-start;font-size:11px}
+.billing-back svg{width:13px}
+.billing-summary{border:1px solid var(--border);border-radius:6px;background:var(--card);padding:14px}
+.billing-summary>header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.billing-summary>header strong,.billing-summary>header small{display:block}
+.billing-summary>header strong{font-size:13px}
+.billing-summary>header small{margin-top:3px;color:var(--muted-foreground);font-size:10px}
+.billing-summary .status-chip{display:inline-flex}
+.billing-figures{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;margin:12px 0 0;overflow:hidden;border:1px solid var(--border);border-radius:5px;background:var(--border)}
+.billing-figures>div{background:var(--secondary);padding:10px 12px}
+.billing-figures dt{color:var(--muted-foreground);font-size:10px}
+.billing-figures dd{margin:4px 0 0;font:800 16px var(--font-heading);font-variant-numeric:tabular-nums}
+.billing-figures .due dd{color:var(--warning)}
+.billing-figures .clear dd{color:var(--success)}
+.billing-heading{margin:0 0 8px;font-size:12px}
+.payment-list{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
+.payment-list li{display:grid;grid-template-columns:30px minmax(0,1fr) auto;align-items:center;gap:10px;border:1px solid var(--border);border-radius:5px;background:var(--card);padding:8px 12px 8px 8px}
+.payment-list strong,.payment-list small{display:block}
+.payment-list strong{font-size:12px}
+.payment-list small{margin-top:2px;color:var(--muted-foreground);font-size:10px}
+.payment-list b{font:800 13px var(--font-heading);font-variant-numeric:tabular-nums}
+.payment-icon{display:grid;width:30px;height:30px;place-items:center;border-radius:5px;background:var(--success-soft);color:var(--success)}
+.payment-icon svg{width:14px}
+.payment-ref{margin-left:8px;border:1px solid var(--border);border-radius:99px;background:var(--secondary);padding:1px 7px;color:var(--muted-foreground);font:600 9px var(--font-body)}
+.add-payment{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--border);padding-top:14px}
+.add-payment-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:12px}
+.billing-paid{display:flex;align-items:center;gap:8px;border:1px solid color-mix(in oklab,var(--success) 40%,var(--border));border-radius:5px;background:var(--success-soft);padding:12px;color:var(--success);font-size:12px;font-weight:600}
+.billing-paid svg{width:16px}
+@media (max-width:760px){.billing-figures{grid-template-columns:1fr}}
+
+/* Billing → Full payment / EMI */
+.payment-type{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.payment-type button{display:flex;flex-direction:column;gap:2px;border:1px solid var(--border);border-radius:6px;background:var(--card);padding:10px 12px;color:var(--foreground);text-align:left;cursor:pointer;transition:border-color .2s,background .2s}
+.payment-type button strong{font-size:12px}
+.payment-type button small{color:var(--muted-foreground);font-size:10px}
+.payment-type button.active{border-color:var(--success);background:var(--success-soft);box-shadow:inset 0 0 0 1px var(--success)}
+.payment-type button:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in oklab,var(--success) 25%,transparent)}
+.emi-planner,.emi-schedule{display:flex;flex-direction:column;gap:10px;border:1px solid var(--border);border-radius:6px;background:var(--card);padding:12px}
+.emi-planner .billing-heading,.emi-schedule .billing-heading{margin:0}
+.emi-rows,.emi-list{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
+.emi-rows li{display:grid;grid-template-columns:26px minmax(0,1fr) 150px;align-items:center;gap:8px}
+.emi-rows input{min-height:38px;width:100%;border:1px solid var(--input);border-radius:5px;background:var(--background);padding:6px 8px;color:var(--foreground);font-size:12px;outline:0}
+.emi-rows input:focus{border-color:var(--ring)}
+.emi-amount{display:flex;align-items:center;gap:6px;color:var(--muted-foreground);font-size:12px}
+.emi-total{margin:0;color:var(--warning);font-size:11px;font-weight:600}
+.emi-total.ok{color:var(--success)}
+.emi-schedule-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+.emi-next{color:var(--warning);font-size:11px;font-weight:700}
+.emi-list li{display:grid;grid-template-columns:26px minmax(0,1fr) auto auto;align-items:center;gap:10px;border:1px solid var(--border);border-radius:5px;padding:7px 10px 7px 8px}
+.emi-list li.emi-paid{background:color-mix(in oklab,var(--success-soft) 45%,var(--card))}
+.emi-list li.emi-overdue{border-color:color-mix(in oklab,var(--destructive) 40%,var(--border))}
+.emi-list strong,.emi-list small{display:block}
+.emi-list strong{font-size:12px}
+.emi-list small{margin-top:2px;color:var(--muted-foreground);font-size:10px}
+.emi-list b{font:800 12px var(--font-heading);font-variant-numeric:tabular-nums}
+.emi-list .status-chip{display:inline-flex}
+.emi-actions{display:flex;flex-wrap:wrap;gap:16px}
+.emi-actions svg{width:12px}
+.link-reset.danger{color:var(--destructive)}
+.billing-heading-hint{color:var(--muted-foreground);font:600 10px var(--font-body)}
+@media (max-width:760px){.emi-rows li{grid-template-columns:26px 1fr}.emi-amount{grid-column:2}}
+
+/* Billing page */
+.billing-stat .metric-trend span.billing-stat-note{color:var(--muted-foreground);font-weight:600}
+.billing-stat-warning>strong{color:var(--warning)!important}
+.billing-stat-error>strong{color:var(--destructive)!important}
+.billing-stat-error .metric-icon{background:var(--error-soft);color:var(--destructive)}
+.billing-stat-warning .metric-icon{background:var(--warning-soft);color:var(--warning)}
+.billing-panel{padding-top:10px}
+.billing-tabs{margin:0 18px 10px}
+.tab-count{margin-left:6px;border-radius:99px;background:var(--secondary);padding:1px 7px;color:var(--muted-foreground);font-size:10px;font-weight:700}
+.billing-panel .table-wrap td .status-chip{display:inline-flex}
+.table-wrap th.num,.table-wrap td.num{text-align:right}
+.table-wrap td.cell-wrap{white-space:normal;min-width:220px}
+.cell-sub{display:block;margin-top:3px;color:var(--muted-foreground);font-size:10px}
+.amount-in{color:var(--success)!important}
+.billing-patient{border:0;background:transparent;padding:0;color:var(--foreground);font-size:11px;font-weight:700;text-align:left;cursor:pointer}
+.billing-patient:hover{color:var(--primary);text-decoration:underline}
+.row-overdue td:first-child{box-shadow:inset 3px 0 0 var(--destructive)}
+
+/* Dashboard (live) */
+:root{--mix-0:var(--primary);--mix-1:var(--success);--mix-2:var(--accent);--mix-3:var(--muted-foreground)}
+.metric-trend span.metric-note{color:var(--muted-foreground);font-weight:600}
+.metric-trend span.trend-up{color:var(--success)}
+.metric-trend span.trend-down{color:var(--destructive)}
+.donut.donut-empty{background:var(--secondary)}
+.progress-note{display:block;margin-top:8px;color:var(--muted-foreground);font-size:10px}
+.progress-fill{transition:width .4s ease}
+.notification-empty{margin:0;padding:14px 10px;color:var(--muted-foreground);font-size:11px;line-height:1.5}
+.support.support-down>span{background:color-mix(in oklab,var(--destructive) 22%,transparent);color:var(--destructive)}
+
+/* Appointment status: Checked in (teal) */
+.status-info{border-color:color-mix(in oklab,var(--primary) 28%,var(--border));background:var(--teal-soft);color:var(--primary)}
+
+/* Check-in tick on day lists */
+.agenda-item,.schedule-item{display:grid;grid-template-columns:30px minmax(0,1fr);align-items:center;gap:4px;border-bottom:1px solid var(--border)}
+.agenda-item:last-child,.schedule-item:last-child{border-bottom:0}
+.agenda-item button.agenda-row,.schedule-item .schedule-row{border:0}
+.checkin-tick{display:grid;width:30px;height:30px;place-items:center;border-radius:5px}
+.checkin-tick button[role=checkbox]{width:20px;height:20px;border-radius:5px}
+.checkin-tick button[role=checkbox]:not(:disabled){cursor:pointer}
+.checkin-tick.checked button[role=checkbox]{border-color:var(--success);background:var(--success);color:#fff}
+
+/* Appointment details → status flow */
+.status-flow{display:flex;flex-direction:column;gap:10px;margin-top:14px;border:1px solid var(--border);border-radius:6px;background:var(--secondary);padding:12px}
+.status-flow ol{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none}
+.status-flow li{display:flex;align-items:center;gap:6px;color:var(--muted-foreground);font:600 10px var(--font-heading)}
+.status-flow li:not(:last-child)::after{content:"→";color:var(--border)}
+.status-flow li.current{color:var(--primary)}
+.status-flow li.current::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--success)}
+.status-flow li.skipped{opacity:.45;text-decoration:line-through}
+.status-flow-action{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.status-flow-action small{color:var(--muted-foreground);font-size:11px}
+.field-note{margin:-4px 0 0;color:var(--muted-foreground);font-size:10px}
+.form-lock{min-width:0;margin:0;border:0;padding:0}
+.form-lock:disabled .form-grid{opacity:.7}
+
+/* ---------- PRP counters & missed visits ---------- */
+.package-progress{display:flex;flex-wrap:wrap;gap:4px 12px}
+.package-progress span:not(:last-child)::after{content:"·";margin-left:12px;color:var(--border)}
+.package-progress .overdue{color:var(--destructive);font-weight:600}
+.timeline i.tl-missed{background:var(--card);box-shadow:inset 0 0 0 1.5px var(--destructive)}
+.status-flow li.missed.current{color:var(--destructive)}
+.treatment-hint{color:var(--success);font-size:10px;font-weight:600}
+
+/* ---------- treatment plans ---------- */
+.plan-row{grid-template-columns:36px minmax(0,1fr) auto}
+.plan-row strong{display:flex;align-items:center;gap:8px}
+.plan-dialog{max-width:min(1080px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow-y:auto}
+.plan-form-body{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:18px;margin-top:16px}
+.plan-form-main{display:flex;flex-direction:column;gap:14px;min-width:0}
+.plan-form-side{align-self:start;position:sticky;top:0;display:flex;flex-direction:column;gap:8px;border:1px solid var(--border);border-radius:6px;background:var(--secondary);padding:14px}
+.plan-total{margin:0;font-size:11px;color:var(--muted-foreground)}
+.plan-total strong{color:var(--foreground)}
+.plan-editor{display:flex;flex-direction:column;gap:10px}
+.plan-items,.plan-block-steps{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
+.plan-item,.plan-block{border:1px solid var(--border);border-radius:6px;background:var(--card);padding:8px 10px}
+.plan-block{border-color:color-mix(in oklab,var(--primary) 30%,var(--border));background:color-mix(in oklab,var(--teal-soft) 55%,var(--card))}
+.plan-block-head{display:flex;align-items:center;gap:10px;padding:2px 0 8px;color:var(--primary);font:700 11px var(--font-heading)}
+.plan-block-head>svg{width:15px;flex:none}
+.plan-block-head label{display:flex;align-items:center;gap:6px}
+.plan-block-head input{width:56px;min-height:32px;border:1px solid var(--input);border-radius:5px;background:var(--background);padding:4px 8px;color:var(--foreground);font:inherit}
+.plan-block-head small{color:var(--muted-foreground);font:500 10px var(--font-body)}
+.plan-block-head .plan-actions{margin-left:auto}
+.plan-block-steps>li{border:1px solid var(--border);border-radius:5px;background:var(--card);padding:6px 8px}
+.plan-block-add{margin-top:8px;font-size:11px}
+.plan-step{display:flex;flex-direction:column;gap:6px}
+.plan-gap{display:flex;flex-wrap:wrap;align-items:center;gap:6px;color:var(--muted-foreground);font-size:10px}
+.plan-gap>svg{width:14px;color:var(--primary)}
+.plan-gap input{width:58px}
+.plan-gap input,.plan-gap select,.plan-step-main select,.plan-step-main input{min-height:34px;border:1px solid var(--input);border-radius:5px;background:var(--background);padding:4px 8px;color:var(--foreground);font-size:11px;outline:0}
+.plan-gap input:focus,.plan-gap select:focus,.plan-step-main select:focus,.plan-step-main input:focus{border-color:var(--ring)}
+.plan-gap-quick{display:inline-flex;gap:3px;margin-left:auto}
+.plan-gap-quick button{min-height:24px;border:1px solid var(--border);border-radius:99px;background:var(--card);padding:0 8px;color:var(--muted-foreground);font:600 10px var(--font-heading)}
+.plan-gap-quick button.active{border-color:var(--primary);background:var(--primary);color:var(--primary-foreground)}
+.plan-step-main{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.plan-step-main>select{min-width:170px;flex:1}
+.plan-qty,.plan-price{display:inline-flex;align-items:center;gap:5px;color:var(--muted-foreground);font-size:10px}
+.plan-qty input{width:84px}
+.plan-price input{width:92px}
+.plan-price small{font-size:9px}
+.plan-free{min-height:30px;border:1px solid var(--border);border-radius:99px;background:var(--card);padding:0 10px;color:var(--muted-foreground);font:700 10px var(--font-heading)}
+.plan-free.active{border-color:color-mix(in oklab,var(--success) 45%,var(--border));background:var(--success-soft);color:var(--success)}
+.plan-actions{display:inline-flex;gap:2px;margin-left:auto}
+.plan-actions button{display:grid;width:28px;height:28px;place-items:center;border:0;border-radius:4px;background:transparent;color:var(--muted-foreground)}
+.plan-actions button:hover:not(:disabled){background:var(--secondary);color:var(--foreground)}
+.plan-actions button:disabled{opacity:.3}
+.plan-actions svg{width:14px}
+.plan-add{display:flex;flex-wrap:wrap;gap:16px;font-size:11px}
+.plan-add button,.plan-block-add{display:inline-flex;align-items:center;gap:6px;color:var(--primary);font-weight:700}
+.plan-add svg,.plan-block-add svg{width:14px}
+.plan-preview{display:flex;flex-direction:column;gap:6px}
+.plan-preview-head{margin:0;font-size:11px;color:var(--muted-foreground)}
+.plan-preview-head strong{color:var(--foreground)}
+.plan-preview ol{position:relative;display:flex;flex-direction:column;max-height:340px;scroll-behavior:smooth;margin:0;overflow-y:auto;padding:0;list-style:none}
+.plan-preview ol li{display:grid;grid-template-columns:18px 56px minmax(0,1fr) auto auto;align-items:baseline;gap:8px;border-bottom:1px dashed var(--border);padding:6px 0;font-size:10px}
+.plan-preview li:last-child{border:0}
+.plan-preview li.surgery .pp-what{color:var(--warning);font-weight:700}
+.pp-date{color:var(--muted-foreground);font-variant-numeric:tabular-nums}
+.pp-what{min-width:0;color:var(--foreground)}
+.pp-what small{color:var(--muted-foreground)}
+.pp-gap{color:var(--muted-foreground)}
+.plan-preview b{font-variant-numeric:tabular-nums}
+.plan-preview b.free{color:var(--success)}
+.plan-preview-note{margin:0;color:var(--muted-foreground);font-size:9px}
+.plan-builder{grid-template-columns:minmax(0,1fr) 340px}
+.edit-patient-dialog:has(.plan-builder){max-width:min(1120px,calc(100vw - 32px))}
+.next-visit{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;margin-top:10px;border:1px solid color-mix(in oklab,var(--primary) 30%,var(--border));border-radius:6px;background:var(--teal-soft);padding:10px 12px}
+.next-visit>svg{width:16px;color:var(--primary)}
+.next-visit strong,.next-visit small{display:block}
+.next-visit strong{font-size:11px}
+.next-visit small{margin-top:2px;color:var(--muted-foreground);font-size:10px}
+@media (max-width:860px){.plan-form-body,.plan-builder{grid-template-columns:1fr}.plan-form-side{position:static}.plan-gap-quick{margin-left:0}}
+.plan-block-warning{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin-bottom:8px;border:1px solid color-mix(in oklab,var(--warning) 35%,var(--border));border-radius:5px;background:var(--warning-soft);padding:8px 10px;color:var(--warning);font-size:10px}
+.plan-block-warning p{flex:1 1 280px;margin:0}
+.plan-block-warning button{color:var(--warning);font-weight:700;text-decoration:underline}
+.plan-counts{display:flex;flex-direction:column;gap:3px;margin:0;border:1px solid var(--border);border-radius:5px;background:var(--card);padding:8px 10px;list-style:none;font-size:10px}
+.plan-counts li{display:flex;justify-content:space-between;gap:8px}
+.plan-counts b{font-variant-numeric:tabular-nums}
+.plan-counts small{color:var(--success);font-weight:600}
+.pp-num{color:var(--muted-foreground);font-size:9px;font-variant-numeric:tabular-nums;text-align:right}
+.plan-preview ol li.just-added{animation:plan-flash 1.4s ease-out}
+@keyframes plan-flash{0%,40%{background:color-mix(in oklab,var(--success) 22%,transparent)}100%{background:transparent}}
+@media (prefers-reduced-motion:reduce){.plan-preview ol{scroll-behavior:auto}.plan-preview ol li.just-added{animation:none;background:color-mix(in oklab,var(--success) 14%,transparent)}}
+.surgical-tag{display:inline-grid;width:18px;height:18px;flex:none;place-items:center;border:1px solid color-mix(in oklab,var(--warning) 40%,var(--border));border-radius:50%;background:var(--warning-soft);color:var(--warning);vertical-align:middle}
+.surgical-tag svg{width:11px;height:11px}
+.catalog-name{display:flex!important;align-items:center;gap:6px}
+.pp-what .surgical-tag{width:15px;height:15px;margin-left:5px}
+.pp-what .surgical-tag svg{width:9px;height:9px}

@@ -2,6 +2,8 @@ import { SeedEntity } from '../common/entity';
 import { Appointment } from '../appointments/appointment.entity';
 import { ConcernOption, TreatmentOption } from '../catalog/catalog.entity';
 import { Invoice } from '../invoices/invoice.entity';
+import { Payment } from '../invoices/payment.entity';
+import { TreatmentPlan } from '../plans/plan.entity';
 import { Lead } from '../leads/lead.entity';
 import { Patient } from '../patients/patient.entity';
 import { Treatment } from '../treatments/treatment.entity';
@@ -48,6 +50,7 @@ export const seedTeam: SeedEntity<User>[] = [
 export const seedPatients: SeedEntity<Patient>[] = [
   {
     id: 'PT-1084',
+    createdAt: ist('2026-07-24T10:00:00'),
     name: 'Ananya Deshmukh',
     age: 32,
     phone: '+91 98230 78142',
@@ -57,6 +60,7 @@ export const seedPatients: SeedEntity<Patient>[] = [
   },
   {
     id: 'PT-1083',
+    createdAt: ist('2026-06-05T11:30:00'),
     name: 'Rohan Kulkarni',
     age: 41,
     phone: '+91 97654 30218',
@@ -66,6 +70,7 @@ export const seedPatients: SeedEntity<Patient>[] = [
   },
   {
     id: 'PT-1082',
+    createdAt: ist('2026-08-20T16:00:00'),
     name: 'Meera Shah',
     age: 29,
     phone: '+91 98906 44109',
@@ -75,6 +80,7 @@ export const seedPatients: SeedEntity<Patient>[] = [
   },
   {
     id: 'PT-1081',
+    createdAt: ist('2026-09-16T12:15:00'),
     name: 'Siddharth Jain',
     age: 36,
     phone: '+91 99701 52470',
@@ -84,6 +90,7 @@ export const seedPatients: SeedEntity<Patient>[] = [
   },
   {
     id: 'PT-1080',
+    createdAt: ist('2026-03-10T09:45:00'),
     name: 'Kavita Rao',
     age: 45,
     phone: '+91 98221 90433',
@@ -251,6 +258,7 @@ export const seedInvoices: SeedEntity<Invoice>[] = [
     service: 'Hair transplant',
     issuedAt: '2026-09-25',
     amount: 105000,
+    paid: 105000,
     status: 'Paid',
   },
   {
@@ -260,6 +268,7 @@ export const seedInvoices: SeedEntity<Invoice>[] = [
     service: 'PRP package · 4',
     issuedAt: '2026-09-24',
     amount: 18000,
+    paid: 18000,
     status: 'Paid',
   },
   {
@@ -268,6 +277,7 @@ export const seedInvoices: SeedEntity<Invoice>[] = [
     service: 'Consultation',
     issuedAt: '2026-09-24',
     amount: 800,
+    paid: 0,
     status: 'Pending',
   },
   {
@@ -277,6 +287,7 @@ export const seedInvoices: SeedEntity<Invoice>[] = [
     service: 'PRP session',
     issuedAt: '2026-09-23',
     amount: 4500,
+    paid: 4500,
     status: 'Paid',
   },
   {
@@ -286,6 +297,7 @@ export const seedInvoices: SeedEntity<Invoice>[] = [
     service: 'Hair analysis',
     issuedAt: '2026-09-22',
     amount: 1200,
+    paid: 0,
     status: 'Overdue',
   },
 ];
@@ -331,11 +343,93 @@ export const seedTreatmentOptions: SeedEntity<TreatmentOption>[] = [
     sessions: 1,
     price: 20,
     pricingUnit: 'graft',
-    complimentaryPrpSessions: 3,
     duration: 1,
-    durationMax: 2,
+    durationMax: 3,
     durationUnit: 'days',
-    description: 'Priced per graft · includes 3 complimentary PRP sessions',
+    surgical: true,
+    description: 'Priced per graft',
+    active: true,
+  },
+  {
+    id: 'TO-7',
+    name: 'Derma roller',
+    category: 'Scalp therapy',
+    sessions: 1,
+    price: 1500,
+    pricingUnit: 'session',
+    duration: 20,
+    durationUnit: 'minutes',
+    description: 'Microneedling between PRP sessions',
+    active: true,
+  },
+];
+
+/** Settings → Treatment plans (see PlansService). */
+export const seedTreatmentPlans: SeedEntity<TreatmentPlan>[] = [
+  {
+    id: 'TP-1',
+    name: 'PRP with derma roller',
+    description: 'PRP every 21 days with two roller sessions in between',
+    items: [
+      {
+        repeat: 4,
+        steps: [
+          {
+            treatmentId: 'TO-3',
+            gap: { value: 7, unit: 'days' },
+            windowDays: 2,
+          },
+          {
+            treatmentId: 'TO-7',
+            gap: { value: 7, unit: 'days' },
+            windowDays: 2,
+          },
+          {
+            treatmentId: 'TO-7',
+            gap: { value: 7, unit: 'days' },
+            windowDays: 2,
+          },
+        ],
+      },
+    ],
+    active: true,
+  },
+  {
+    id: 'TP-2',
+    name: 'Hair transplant with PRP care',
+    description: 'FUE, then 3 complimentary PRP sessions 2 months apart',
+    items: [
+      { treatmentId: 'TO-6', quantity: 2000, windowDays: 7 },
+      {
+        repeat: 3,
+        steps: [
+          {
+            treatmentId: 'TO-3',
+            gap: { value: 2, unit: 'months' },
+            windowDays: 7,
+            complimentary: true,
+          },
+        ],
+      },
+    ],
+    active: true,
+  },
+  {
+    id: 'TP-3',
+    name: 'Monthly PRP course',
+    description: 'Four PRP sessions a month apart',
+    items: [
+      {
+        repeat: 4,
+        steps: [
+          {
+            treatmentId: 'TO-3',
+            gap: { value: 1, unit: 'months' },
+            windowDays: 3,
+          },
+        ],
+      },
+    ],
     active: true,
   },
 ];
@@ -413,5 +507,42 @@ export const seedConcernOptions: SeedEntity<ConcernOption>[] = [
     description: 'Patchy, round bald spots',
     illustration: 'alopecia-areata',
     active: true,
+  },
+];
+
+// Payments behind the invoices seeded as Paid, so they show under Billing → Received.
+const reception = { id: 'USR-3', name: 'Priya More' };
+export const seedPayments: SeedEntity<Payment>[] = [
+  {
+    id: 'PAY-1',
+    invoiceId: 'INV-26091',
+    patientId: 'PT-1083',
+    patientName: 'Rohan Kulkarni',
+    amount: 105000,
+    method: 'Bank transfer',
+    reference: 'NEFT-SBIN2609',
+    receivedBy: reception,
+    receivedAt: ist('2026-09-25T12:10:00'),
+  },
+  {
+    id: 'PAY-2',
+    invoiceId: 'INV-26090',
+    patientId: 'PT-1082',
+    patientName: 'Meera Shah',
+    amount: 18000,
+    method: 'UPI',
+    reference: 'UPI-6620145',
+    receivedBy: reception,
+    receivedAt: ist('2026-09-24T15:40:00'),
+  },
+  {
+    id: 'PAY-3',
+    invoiceId: 'INV-26088',
+    patientId: 'PT-1080',
+    patientName: 'Kavita Rao',
+    amount: 4500,
+    method: 'Cash',
+    receivedBy: reception,
+    receivedAt: ist('2026-09-23T11:05:00'),
   },
 ];

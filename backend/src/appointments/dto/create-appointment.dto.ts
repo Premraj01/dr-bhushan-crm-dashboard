@@ -1,7 +1,6 @@
 import { Type } from 'class-transformer';
 import {
   IsDateString,
-  IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -12,10 +11,6 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import {
-  APPOINTMENT_STATUSES,
-  type AppointmentStatus,
-} from '../appointment.entity';
 
 /** Minimal registration for a first-time patient, done while booking. */
 export class NewPatientDto {
@@ -67,9 +62,12 @@ export class CreateAppointmentDto {
   @Max(480)
   durationMinutes?: number;
 
+  /** Consecutive days for surgery that spans more than one day (1–3). */
   @IsOptional()
-  @IsIn(APPOINTMENT_STATUSES)
-  status?: AppointmentStatus;
+  @IsInt()
+  @Min(1)
+  @Max(3)
+  days?: number;
 
   @IsOptional()
   @IsString()

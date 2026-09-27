@@ -5,6 +5,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { AuthModule } from './auth/auth.module';
+import { BillingModule } from './billing/billing.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { HttpThrottlerGuard } from './common/http-throttler.guard';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
@@ -16,6 +17,7 @@ import { InvoicesModule } from './invoices/invoices.module';
 import { LeadsModule } from './leads/leads.module';
 import { PackagesModule } from './packages/packages.module';
 import { PatientsModule } from './patients/patients.module';
+import { PlansModule } from './plans/plans.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { TreatmentsModule } from './treatments/treatments.module';
 import { UsersModule } from './users/users.module';
@@ -37,6 +39,8 @@ import { UsersModule } from './users/users.module';
     TreatmentsModule,
     InvoicesModule,
     CatalogModule,
+    BillingModule,
+    PlansModule,
     PackagesModule,
     DashboardModule,
     RealtimeModule,

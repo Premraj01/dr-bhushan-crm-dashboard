@@ -60,23 +60,9 @@ export class TreatmentCatalogService extends NamedCatalogService<TreatmentOption
     return this.createNamed({
       ...dto,
       pricingUnit: dto.pricingUnit ?? 'session',
+      surgical: dto.surgical ?? false,
       active: dto.active ?? true,
     });
-  }
-
-  /** The active per-session PRP entry used to price PRP in packages. */
-  prpSession(): TreatmentOption | undefined {
-    return this.list().find(
-      (t) => t.active && t.category === 'PRP' && t.pricingUnit === 'session',
-    );
-  }
-
-  /** The active per-graft transplant entry used to price surgery in packages. */
-  graftTransplant(): TreatmentOption | undefined {
-    return this.list().find(
-      (t) =>
-        t.active && t.category === 'Transplant' && t.pricingUnit === 'graft',
-    );
   }
 
   override update(id: string, dto: UpdateTreatmentOptionDto): TreatmentOption {

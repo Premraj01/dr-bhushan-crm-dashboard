@@ -3,7 +3,7 @@ import { AlertTriangle, Check, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export type Tone = "success" | "warning" | "error" | "neutral";
+export type Tone = "success" | "warning" | "error" | "neutral" | "info";
 
 export function StatusChip({ children, tone = "neutral" }: { children: ReactNode; tone?: Tone }) {
   return (
