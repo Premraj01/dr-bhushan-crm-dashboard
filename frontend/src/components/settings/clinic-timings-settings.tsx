@@ -1,23 +1,48 @@
 import { useMemo, useState } from "react";
-import { CalendarClock, Save } from "lucide-react";
+import { CalendarClock, CalendarX2, Plus, Save, Trash2 } from "lucide-react";
 import { Banner, SectionHeader, StatusChip } from "@/components/crm-ui";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
   formatHours,
+  saveClinicClosures,
   saveClinicTimings,
+  useClinicClosures,
   useClinicTimings,
+  type ClinicClosure,
   type DayTiming,
 } from "@/lib/clinic-timings";
 
+/** "2026-10-02" → "2 Oct 2026". */
+function formatDate(value: string) {
+  return new Date(`${value}T00:00:00`).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function closureLabel(closure: ClinicClosure) {
+  return closure.from === closure.to
+    ? formatDate(closure.from)
+    : `${formatDate(closure.from)} – ${formatDate(closure.to)}`;
+}
+
 export function ClinicTimingsSettings({ onNotice }: { onNotice: (message: string) => void }) {
   const saved = useClinicTimings();
+  const savedClosures = useClinicClosures();
   const [timings, setTimings] = useState<DayTiming[]>(saved);
+  const [closures, setClosures] = useState<ClinicClosure[]>(savedClosures);
+  const [draft, setDraft] = useState({ from: "", to: "", reason: "" });
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
   const openDays = useMemo(() => timings.filter((item) => item.open), [timings]);
   const invalidDays = timings.filter(
     (item) => item.open && (!item.opensAt || !item.closesAt || item.closesAt <= item.opensAt),
+  );
+  const sortedClosures = useMemo(
+    () => [...closures].sort((a, b) => a.from.localeCompare(b.from)),
+    [closures],
   );
 
   const updateDay = (index: number, update: Partial<DayTiming>) => {
@@ -25,6 +50,34 @@ export function ClinicTimingsSettings({ onNotice }: { onNotice: (message: string
     setTimings((current) =>
       current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...update } : item)),
     );
+  };
+
+  const addClosure = () => {
+    if (!draft.from) {
+      setMessage({ tone: "error", text: "Pick the first closed day before adding a closure." });
+      return;
+    }
+    const to = draft.to || draft.from;
+    if (to < draft.from) {
+      setMessage({ tone: "error", text: "The last closed day can't be before the first one." });
+      return;
+    }
+    setMessage(null);
+    setClosures((current) => [
+      ...current,
+      {
+        id: `closure-${Date.now()}`,
+        from: draft.from,
+        to,
+        reason: draft.reason.trim() || "Clinic closed",
+      },
+    ]);
+    setDraft({ from: "", to: "", reason: "" });
+  };
+
+  const removeClosure = (id: string) => {
+    setMessage(null);
+    setClosures((current) => current.filter((item) => item.id !== id));
   };
 
   const save = () => {
@@ -36,6 +89,7 @@ export function ClinicTimingsSettings({ onNotice }: { onNotice: (message: string
       return;
     }
     saveClinicTimings(timings);
+    saveClinicClosures(closures);
     setMessage({ tone: "success", text: "Clinic timings saved successfully." });
     onNotice("Clinic timings saved successfully.");
   };
