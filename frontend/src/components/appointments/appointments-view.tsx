@@ -55,7 +55,7 @@ function suggestedDate(pkg: TreatmentPackage, index: number): string {
 }
 
 type DayEntry = { appointment: Appointment; dayIndex: number };
-type CalendarView = "month" | "six-months";
+type CalendarView = "month" | "three-months" | "six-months";
 
 function monthDays(month: string) {
   const [year, monthNumber] = month.split("-").map(Number) as [number, number];
@@ -107,11 +107,13 @@ export function AppointmentsView({
   const pickedPackage =
     awaitingSurgery.find((p) => p.packageId === surgeryPick) ?? awaitingSurgery[0];
   const monthQuery = useAppointments({ month });
-  const overviewMonths = Array.from({ length: 6 }, (_, index) =>
+  const overviewCount = calendarView === "three-months" ? 3 : 6;
+  const isOverview = calendarView !== "month";
+  const overviewMonths = Array.from({ length: overviewCount }, (_, index) =>
     addMonths(`${month}-01`, index).slice(0, 7),
   );
-  const overviewQuery = useAppointmentMonths(overviewMonths, calendarView === "six-months");
-  const activeQuery = calendarView === "six-months" ? overviewQuery : monthQuery;
+  const overviewQuery = useAppointmentMonths(overviewMonths, isOverview);
+  const activeQuery = isOverview ? overviewQuery : monthQuery;
   const { data, isPending, isError, refetch, isRefetching } = activeQuery;
   const { data: packages } = usePackages(scheduling?.patientId ?? null);
   const pkg = packages?.find((p) => p.id === scheduling?.packageId);
@@ -158,7 +160,7 @@ export function AppointmentsView({
   const surgeryOn = (day: string) =>
     (byDay.get(day) ?? []).find(({ appointment: a }) => a.days !== undefined)?.appointment;
   const selectedSurgery = surgeryOn(selected);
-  const rangeTitle = `${monthTitle(overviewMonths[0] ?? month)} – ${monthTitle(overviewMonths[5] ?? month)}`;
+  const rangeTitle = `${monthTitle(overviewMonths[0] ?? month)} – ${monthTitle(overviewMonths.at(-1) ?? month)}`;
 
   const renderMonthGrid = (gridMonth: string, compact = false) => {
     const grid = monthDays(gridMonth);
@@ -230,6 +232,14 @@ export function AppointmentsView({
           </Button>
           <Button
             size="sm"
+            variant={calendarView === "three-months" ? "default" : "ghost"}
+            aria-pressed={calendarView === "three-months"}
+            onClick={() => setCalendarView("three-months")}
+          >
+            3 months
+          </Button>
+          <Button
+            size="sm"
             variant={calendarView === "six-months" ? "default" : "ghost"}
             aria-pressed={calendarView === "six-months"}
             onClick={() => setCalendarView("six-months")}
@@ -237,12 +247,12 @@ export function AppointmentsView({
             6 months
           </Button>
         </div>
-        <span>{calendarView === "six-months" ? "Long-range clinic schedule" : "Detailed monthly schedule"}</span>
+        <span>{isOverview ? `${overviewCount}-month clinic schedule` : "Detailed monthly schedule"}</span>
       </div>
       <div className="calendar-layout">
-        <section className={cn("panel calendar-panel", calendarView === "six-months" && "six-month-calendar-panel")}>
+        <section className={cn("panel calendar-panel", isOverview && "six-month-calendar-panel")}>
           <SectionHeader
-            title={calendarView === "six-months" ? rangeTitle : monthTitle(month)}
+            title={isOverview ? rangeTitle : monthTitle(month)}
             trailing={
               <div className="button-pair">
                 {month !== today.slice(0, 7) && (
@@ -253,30 +263,30 @@ export function AppointmentsView({
                 <Button
                   variant="outline"
                   size="icon"
-                  aria-label={calendarView === "six-months" ? "Previous six months" : "Previous month"}
-                  onClick={() => goTo(addMonths(`${month}-01`, calendarView === "six-months" ? -6 : -1).slice(0, 7))}
+                  aria-label={isOverview ? `Previous ${overviewCount} months` : "Previous month"}
+                  onClick={() => goTo(addMonths(`${month}-01`, isOverview ? -overviewCount : -1).slice(0, 7))}
                 >
                   <ChevronLeft />
                 </Button>
                 <Button
                   variant="outline"
                   size="icon"
-                  aria-label={calendarView === "six-months" ? "Next six months" : "Next month"}
-                  onClick={() => goTo(addMonths(`${month}-01`, calendarView === "six-months" ? 6 : 1).slice(0, 7))}
+                  aria-label={isOverview ? `Next ${overviewCount} months` : "Next month"}
+                  onClick={() => goTo(addMonths(`${month}-01`, isOverview ? overviewCount : 1).slice(0, 7))}
                 >
                   <ChevronRight />
                 </Button>
               </div>
             }
           />
-          {calendarView === "six-months" ? (
+          {isOverview ? (
             isPending ? (
               <div className="six-month-calendar-skeleton">
                 {overviewMonths.map((item) => <Skeleton className="h-56 w-full" key={item} />)}
               </div>
             ) : isError ? (
               <div className="table-error calendar-overview-error">
-                <Banner tone="error">Couldn’t load the six-month calendar.</Banner>
+                <Banner tone="error">Couldn’t load the {overviewCount}-month calendar.</Banner>
                 <Button variant="outline" onClick={() => void refetch()} disabled={isRefetching}>
                   <RefreshCw className={isRefetching ? "animate-spin" : undefined} />Try again
                 </Button>
