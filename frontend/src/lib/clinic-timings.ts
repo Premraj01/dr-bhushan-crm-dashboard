@@ -125,9 +125,14 @@ export function useClinicClosures(): ClinicClosure[] {
   return useSyncExternalStore(subscribeClosures, readClosures, () => []);
 }
 
+/** The closure covering a `YYYY-MM-DD` day, if any. */
+export function closureOn(closures: ClinicClosure[], date: string): ClinicClosure | undefined {
+  return closures.find((item) => item.from <= date && date <= item.to);
+}
+
 /** True when a `YYYY-MM-DD` day falls inside a closure. */
 export function isClosedOn(closures: ClinicClosure[], date: string): boolean {
-  return closures.some((item) => item.from <= date && date <= item.to);
+  return !!closureOn(closures, date);
 }
 
 /** Hours for a `YYYY-MM-DD` day. */

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CalendarClock, CalendarX2, Plus, Save, Trash2 } from "lucide-react";
+import { CalendarClock, CalendarX2, LoaderCircle, Plus, Save, Trash2 } from "lucide-react";
 import { Banner, SectionHeader, StatusChip } from "@/components/crm-ui";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -12,6 +12,12 @@ import {
   type ClinicClosure,
   type DayTiming,
 } from "@/lib/clinic-timings";
+import {
+  findAffectedAppointments,
+  type AffectedAppointment,
+  type ClinicChange,
+} from "./affected-appointments";
+import { AffectedAppointmentsDialog } from "./affected-appointments-dialog";
 
 /** "2026-10-02" → "2 Oct 2026". */
 function formatDate(value: string) {
@@ -28,13 +34,35 @@ function closureLabel(closure: ClinicClosure) {
     : `${formatDate(closure.from)} – ${formatDate(closure.to)}`;
 }
 
-export function ClinicTimingsSettings({ onNotice }: { onNotice: (message: string) => void }) {
+export function ClinicTimingsSettings({
+  onNotice,
+  onReschedule,
+}: {
+  onNotice: (message: string) => void;
+  /** Open the appointment calendar to move visits the new hours rule out. */
+  onReschedule: () => void;
+}) {
   const saved = useClinicTimings();
   const savedClosures = useClinicClosures();
   const [timings, setTimings] = useState<DayTiming[]>(saved);
   const [closures, setClosures] = useState<ClinicClosure[]>(savedClosures);
   const [draft, setDraft] = useState({ from: "", to: "", reason: "" });
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [affected, setAffected] = useState<AffectedAppointment[]>([]);
+
+  // After a change, warn about upcoming appointments that no longer fit. If the server
+  // can't be reached the change still stands; the calendar shows the conflicts anyway.
+  const checkAffected = async (change: ClinicChange) => {
+    setChecking(true);
+    try {
+      setAffected(await findAffectedAppointments(change));
+    } catch {
+      setAffected([]);
+    } finally {
+      setChecking(false);
+    }
+  };
 
   const openDays = useMemo(() => timings.filter((item) => item.open), [timings]);
   const invalidDays = timings.filter(
@@ -62,22 +90,26 @@ export function ClinicTimingsSettings({ onNotice }: { onNotice: (message: string
       setMessage({ tone: "error", text: "The last closed day can't be before the first one." });
       return;
     }
-    setMessage(null);
-    setClosures((current) => [
-      ...current,
-      {
-        id: `closure-${Date.now()}`,
-        from: draft.from,
-        to,
-        reason: draft.reason.trim() || "Clinic closed",
-      },
-    ]);
+    const closure = {
+      id: `closure-${Date.now()}`,
+      from: draft.from,
+      to,
+      reason: draft.reason.trim() || "Clinic closed",
+    };
+    // Closures take effect straight away; the weekly hours still wait for "Save timings".
+    const next = [...closures, closure];
+    setClosures(next);
+    saveClinicClosures(next);
     setDraft({ from: "", to: "", reason: "" });
+    setMessage({ tone: "success", text: `Clinic closed on ${closureLabel(closure)}.` });
+    void checkAffected({ closure });
   };
 
   const removeClosure = (id: string) => {
+    const next = closures.filter((item) => item.id !== id);
+    setClosures(next);
+    saveClinicClosures(next);
     setMessage(null);
-    setClosures((current) => current.filter((item) => item.id !== id));
   };
 
   const save = () => {
@@ -89,9 +121,9 @@ export function ClinicTimingsSettings({ onNotice }: { onNotice: (message: string
       return;
     }
     saveClinicTimings(timings);
-    saveClinicClosures(closures);
     setMessage({ tone: "success", text: "Clinic timings saved successfully." });
     onNotice("Clinic timings saved successfully.");
+    void checkAffected({ timings });
   };
 
   return (
@@ -239,12 +271,25 @@ export function ClinicTimingsSettings({ onNotice }: { onNotice: (message: string
 
         <div className="clinic-timings-footer">
           <p>The appointment calendar and booking form only allow times within these hours.</p>
-          <Button onClick={save}>
-            <Save />
-            Save timings
+          <Button onClick={save} disabled={checking}>
+            {checking ? <LoaderCircle className="animate-spin" /> : <Save />}
+            {checking ? "Checking appointments…" : "Save timings"}
           </Button>
         </div>
       </div>
+      <AffectedAppointmentsDialog
+        affected={affected}
+        onOpenChange={(open) => !open && setAffected([])}
+        onReschedule={() => {
+          setAffected([]);
+          onReschedule();
+        }}
+        onSendReminder={() => {
+          // Not wired up yet: reminders need a messaging channel on the backend.
+          setAffected([]);
+          onNotice("Sending reminders isn’t available yet — reschedule the appointments for now.");
+        }}
+      />
     </section>
   );
 }

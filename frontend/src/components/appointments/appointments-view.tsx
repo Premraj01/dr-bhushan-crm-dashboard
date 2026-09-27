@@ -11,7 +11,13 @@ import {
 } from "@/components/patients/patients-api";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatHours, hoursOn, useClinicTimings } from "@/lib/clinic-timings";
+import {
+  closureOn,
+  formatHours,
+  hoursOn,
+  useClinicClosures,
+  useClinicTimings,
+} from "@/lib/clinic-timings";
 import { cn } from "@/lib/utils";
 import {
   appointmentTone,
@@ -117,6 +123,7 @@ export function AppointmentsView({
   const activeQuery = isOverview ? overviewQuery : monthQuery;
   const { data, isPending, isError, refetch, isRefetching } = activeQuery;
   const timings = useClinicTimings();
+  const closures = useClinicClosures();
   const { data: packages } = usePackages(scheduling?.patientId ?? null);
   const pkg = packages?.find((p) => p.id === scheduling?.packageId);
 
@@ -163,6 +170,9 @@ export function AppointmentsView({
     (byDay.get(day) ?? []).find(({ appointment: a }) => a.days !== undefined)?.appointment;
   const selectedSurgery = surgeryOn(selected);
   const selectedHours = hoursOn(timings, selected);
+  // A holiday/closure overrides the weekly hours.
+  const selectedClosure = closureOn(closures, selected);
+  const selectedOpen = selectedHours.open && !selectedClosure;
   const rangeTitle = `${monthTitle(overviewMonths[0] ?? month)} – ${monthTitle(overviewMonths.at(-1) ?? month)}`;
 
   const renderMonthGrid = (gridMonth: string, compact = false) => {
@@ -182,7 +192,8 @@ export function AppointmentsView({
           {grid.days.map((day) => {
             const count = (byDay.get(day) ?? []).length;
             const surgery = surgeryOn(day);
-            const closed = !hoursOn(timings, day).open;
+            const closure = closureOn(closures, day);
+            const closed = !hoursOn(timings, day).open || !!closure;
             return (
               <button
                 key={day}
@@ -194,7 +205,7 @@ export function AppointmentsView({
                   closed && "closed-day",
                 )}
                 aria-pressed={day === selected}
-                aria-label={`${new Date(`${day}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "long" })}${closed ? ", clinic closed" : ""}${surgery ? ", surgery day (theatre blocked, OPD open)" : ""}${count ? `, ${count} appointment${count > 1 ? "s" : ""}` : ""}`}
+                aria-label={`${new Date(`${day}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "long" })}${closure ? `, clinic closed (${closure.reason})` : closed ? ", clinic closed" : ""}${surgery ? ", surgery day (theatre blocked, OPD open)" : ""}${count ? `, ${count} appointment${count > 1 ? "s" : ""}` : ""}`}
                 onClick={() => setSelected(day)}
               >
                 {Number(day.slice(8))}
@@ -347,12 +358,12 @@ export function AppointmentsView({
             subtitle={
               isPending
                 ? "Loading…"
-                : `${formatHours(selectedHours)} · ${agenda.length} appointment${agenda.length === 1 ? "" : "s"}`
+                : `${selectedClosure ? `Closed · ${selectedClosure.reason}` : formatHours(selectedHours)} · ${agenda.length} appointment${agenda.length === 1 ? "" : "s"}`
             }
           />
           {!isPending &&
             selected >= today &&
-            selectedHours.open &&
+            selectedOpen &&
             !selectedSurgery &&
             onStartScheduling && (
               <div className="day-surgery-picker">
@@ -394,6 +405,13 @@ export function AppointmentsView({
                 )}
               </div>
             )}
+          {!isPending && !selectedOpen && agenda.length > 0 && (
+            <Banner tone="warning">
+              The clinic is closed this day
+              {selectedClosure ? ` (${selectedClosure.reason})` : ""}, but {agenda.length}{" "}
+              appointment{agenda.length === 1 ? " is" : "s are"} still booked. Reschedule them.
+            </Banner>
+          )}
           {selectedSurgery && !isPending && (
             <div className="surgery-day-note">
               <Scissors />
@@ -433,11 +451,11 @@ export function AppointmentsView({
           ) : agenda.length === 0 ? (
             <div className="empty-state">
               <CalendarDays />
-              <h3>{selectedHours.open ? "No appointments" : "Clinic closed"}</h3>
+              <h3>{selectedOpen ? "No appointments" : "Clinic closed"}</h3>
               <p>
-                {selectedHours.open
+                {selectedOpen
                   ? "Nothing is booked for this day."
-                  : "No appointments can be booked on this day. Change it in Settings → Clinic timings."}
+                  : `${selectedClosure ? `${selectedClosure.reason}. ` : ""}No appointments can be booked on this day. Change it in Settings → Clinic timings.`}
               </p>
             </div>
           ) : (
