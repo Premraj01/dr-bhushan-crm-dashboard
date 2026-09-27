@@ -144,8 +144,6 @@ export function AppointmentsView({
       byDay.set(day, [...(byDay.get(day) ?? []), { appointment: a, dayIndex }]);
     }
   }
-  const { leading, days } = monthDays(month);
-
   const goTo = (next: string) => {
     setMonth(next);
     setSelected(next === today.slice(0, 7) ? today : `${next}-01`);
