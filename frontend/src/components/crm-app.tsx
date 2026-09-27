@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode, useCallback } from "react";
 import {
-  Activity, AlertTriangle, BarChart3, Bell, CalendarDays, Check, ChevronDown,
+  Activity, AlertTriangle, BarChart3, Bell, BellRing, CalendarDays, Check, ChevronDown,
   ChevronRight, CircleDollarSign, RefreshCw, ClipboardList, ClipboardPlus, Clock3, CreditCard, FileText,
   FlaskConical, LayoutDashboard, ListOrdered, LoaderCircle, LogOut, Menu, MessageCircle, Moon, MoreHorizontal,
   Phone, Plus, Search, Settings, Sparkles, Sun, UserRound, Users, X, Zap,
@@ -19,6 +19,7 @@ import { AppointmentDialog } from "@/components/appointments/book-appointment-di
 import { CheckInTick } from "@/components/appointments/check-in-tick";
 import { PendingBookingsQueue } from "@/components/appointments/pending-bookings";
 import { BillingView } from "@/components/billing/billing-view";
+import { RemindersView } from "@/components/reminders/reminders-view";
 import { useDashboardSummary } from "@/components/dashboard/dashboard-api";
 import { inr } from "@/components/settings/catalog-settings";
 import { appointmentTone, clinicTimeOf, useAppointments } from "@/components/appointments/appointments-api";
@@ -33,14 +34,14 @@ import { useNavigate } from "@tanstack/react-router";
 import { consumeJustLoggedIn, getSessionUser, greetingName, initials, mockSignOut, ROLE_LABELS } from "@/lib/mock-auth";
 
 type ClinicAlert = { tone: "success" | "warning" | "error" | "neutral"; title: string; message: string; at: string };
-type View = "Dashboard" | "Patients" | "Appointments" | "Leads" | "Treatments" | "Billing" | "Reports" | "Settings";
+type View = "Dashboard" | "Patients" | "Appointments" | "Leads" | "Treatments" | "Billing" | "Reminders" | "Reports" | "Settings";
 type Icon = ComponentType<{ className?: string }>;
 
 const navItems: { label: View; icon: Icon }[] = [
   { label: "Dashboard", icon: LayoutDashboard }, { label: "Patients", icon: Users },
   { label: "Appointments", icon: CalendarDays }, { label: "Leads", icon: MessageCircle },
   { label: "Treatments", icon: FlaskConical }, { label: "Billing", icon: CreditCard },
-  { label: "Reports", icon: BarChart3 }, { label: "Settings", icon: Settings },
+  { label: "Reminders", icon: BellRing }, { label: "Reports", icon: BarChart3 }, { label: "Settings", icon: Settings },
 ];
 
 
@@ -234,7 +235,7 @@ export function CRMApp() {
   const navigate=useCallback((label:View)=>{setLoading(true);setView(label);setMobile(false);setTimeout(()=>setLoading(false),900)},[]);
   const scheduleSessions=useCallback((pkg:{id:string;patientId:string},index?:number)=>{setProfile(null);setEditing(null);setScheduling({packageId:pkg.id,patientId:pkg.patientId,...(index!==undefined&&{index})});navigate("Appointments")},[navigate]);
   const title = view;
-  const content=useMemo(()=>{const show=(k:string)=>setAction(k); switch(view){case "Dashboard":return <Dashboard onNotice={setNotice} onBook={()=>setBooking(true)} onCalendar={()=>navigate("Appointments")} onSchedule={scheduleSessions} onPatient={setProfile} onViewPatients={()=>navigate("Patients")} userName={user.name}/>;case "Patients":return <PatientsView onAdd={()=>show("Add patient")} onSelect={setProfile}/>;case "Appointments":return <AppointmentsView scheduling={scheduling} onStartScheduling={setScheduling} onEndScheduling={()=>setScheduling(null)} onOpenPatient={setProfile} onNotice={setNotice}/>;case "Leads":return <LeadsView onAdd={()=>show("Add enquiry")}/>;case "Treatments":return <TreatmentsView onAdd={()=>show("Record treatment")}/>;case "Billing":return <BillingView onNotice={setNotice} onOpenPatient={setProfile}/>;case "Reports":return <ReportsView onExport={()=>{setNotice("Report exported successfully.")}}/>;case "Settings":return <SettingsView onInvite={()=>show("Invite team member")} onNotice={setNotice} isAdmin={user.role==="Admin"}/>;}},[view,user.name,user.role,scheduling,scheduleSessions,navigate]);
+  const content=useMemo(()=>{const show=(k:string)=>setAction(k); switch(view){case "Dashboard":return <Dashboard onNotice={setNotice} onBook={()=>setBooking(true)} onCalendar={()=>navigate("Appointments")} onSchedule={scheduleSessions} onPatient={setProfile} onViewPatients={()=>navigate("Patients")} userName={user.name}/>;case "Patients":return <PatientsView onAdd={()=>show("Add patient")} onSelect={setProfile}/>;case "Appointments":return <AppointmentsView scheduling={scheduling} onStartScheduling={setScheduling} onEndScheduling={()=>setScheduling(null)} onOpenPatient={setProfile} onNotice={setNotice}/>;case "Leads":return <LeadsView onAdd={()=>show("Add enquiry")}/>;case "Treatments":return <TreatmentsView onAdd={()=>show("Record treatment")}/>;case "Billing":return <BillingView onNotice={setNotice} onOpenPatient={setProfile}/>;case "Reminders":return <RemindersView onNotice={setNotice}/>;case "Reports":return <ReportsView onExport={()=>{setNotice("Report exported successfully.")}}/>;case "Settings":return <SettingsView onInvite={()=>show("Invite team member")} onNotice={setNotice} isAdmin={user.role==="Admin"}/>;}},[view,user.name,user.role,scheduling,scheduleSessions,navigate]);
   return <div className="app-shell">
     {(booting||overlay)&&<AppLoader label={booting?"Preparing your clinic workspace…":overlay??"Loading…"}/>}
     {mobile&&<button className="mobile-overlay" onClick={()=>setMobile(false)} aria-label="Close navigation"/>}
