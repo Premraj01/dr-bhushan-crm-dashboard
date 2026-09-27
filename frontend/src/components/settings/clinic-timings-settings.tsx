@@ -167,6 +167,76 @@ export function ClinicTimingsSettings({ onNotice }: { onNotice: (message: string
           ))}
         </div>
 
+        <div className="clinic-timings-actions">
+          <div>
+            <strong>Closures &amp; holidays</strong>
+            <span>Close the clinic for a day or a stretch — a holiday, renovation, or leave.</span>
+          </div>
+        </div>
+
+        <div className="clinic-closures">
+          <div className="clinic-closure-form">
+            <label>
+              <span>From</span>
+              <input
+                type="date"
+                value={draft.from}
+                onChange={(event) => setDraft({ ...draft, from: event.target.value })}
+              />
+            </label>
+            <label>
+              <span>To</span>
+              <input
+                type="date"
+                value={draft.to}
+                min={draft.from || undefined}
+                onChange={(event) => setDraft({ ...draft, to: event.target.value })}
+              />
+            </label>
+            <label className="clinic-closure-reason">
+              <span>Reason</span>
+              <input
+                type="text"
+                placeholder="e.g. Diwali, doctor on leave"
+                value={draft.reason}
+                onChange={(event) => setDraft({ ...draft, reason: event.target.value })}
+              />
+            </label>
+            <Button type="button" variant="outline" onClick={addClosure}>
+              <Plus />
+              Add closure
+            </Button>
+          </div>
+
+          {sortedClosures.length ? (
+            <div className="clinic-closure-list" role="list" aria-label="Upcoming closures">
+              {sortedClosures.map((closure) => (
+                <div className="clinic-closure-row" role="listitem" key={closure.id}>
+                  <span className="clinic-closure-icon">
+                    <CalendarX2 />
+                  </span>
+                  <div className="clinic-closure-info">
+                    <strong>{closureLabel(closure)}</strong>
+                    <span>{closure.reason}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="clinic-closure-remove"
+                    onClick={() => removeClosure(closure.id)}
+                    aria-label={`Remove closure ${closureLabel(closure)}`}
+                  >
+                    <Trash2 />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="clinic-closure-empty">
+              No closures planned — the clinic follows the weekly schedule above.
+            </p>
+          )}
+        </div>
+
         <div className="clinic-timings-footer">
           <p>The appointment calendar and booking form only allow times within these hours.</p>
           <Button onClick={save}>
