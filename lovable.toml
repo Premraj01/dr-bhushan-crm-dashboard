@@ -1,0 +1,4 @@
+# The app lives in frontend/ (Vite SPA); backend/ is the NestJS API on :4000.
+# The preview daemon must serve the frontend on port 8080.
+[run]
+dev = "npm run dev --prefix frontend -- --port 8080 --strictPort --host"
