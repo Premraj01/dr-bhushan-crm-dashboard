@@ -49,8 +49,8 @@ export abstract class CrudService<T extends Entity> {
     this.publish('deleted', { id: item.id });
   }
 
-  protected insert(data: NewEntity<T>): T {
-    const created = this.repo.create(data);
+  protected insert(data: NewEntity<T>, id?: string): T {
+    const created = this.repo.create(data, id);
     this.publish('created', created);
     return created;
   }

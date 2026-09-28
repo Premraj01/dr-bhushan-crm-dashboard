@@ -1,6 +1,7 @@
 import { SeedEntity } from '../common/entity';
 import { Appointment } from '../appointments/appointment.entity';
 import { ConcernOption, TreatmentOption } from '../catalog/catalog.entity';
+import { InventoryItem } from '../inventory/inventory-item.entity';
 import { Invoice } from '../invoices/invoice.entity';
 import { Payment } from '../invoices/payment.entity';
 import { TreatmentPlan } from '../plans/plan.entity';
@@ -15,7 +16,7 @@ const ist = (local: string) => new Date(`${local}+05:30`).toISOString();
 /**
  * Demo patients and their appointments, treatment records, invoices and payments load only
  * when SEED_DEMO_DATA=true (the e2e tests turn it on). Otherwise the clinic starts empty;
- * team logins, Settings (treatments, concerns, plans) and leads are always seeded.
+ * team logins, Settings (treatments, concerns, plans), leads and sample inventory are always seeded.
  */
 // Read when each service starts (after .env is loaded), not when this file is imported.
 const demo =
@@ -558,8 +559,170 @@ const demoPayments: SeedEntity<Payment>[] = [
   },
 ];
 
+// Products stocked at the clinic; ids are SKUs / barcodes. Images are served by the
+// frontend from public/products/.
+const seedInventoryItems: SeedEntity<InventoryItem>[] = [
+  {
+    id: '8901234560011',
+    name: 'Minoxidil 5% topical solution 60 ml',
+    company: 'Dr. Reddy’s',
+    type: 'Solution',
+    stockQuantity: 42,
+    reorderLevel: 15,
+    costPrice: 480,
+    sellingPrice: 650,
+    batchNo: 'MX5-2406',
+    expiryDate: '2027-06-30',
+    imageUrl: '/products/minoxidil-solution.svg',
+  },
+  {
+    id: '8901234560028',
+    name: 'Finasteride 1 mg (10 tablets)',
+    company: 'Cipla',
+    type: 'Tablet',
+    stockQuantity: 8,
+    reorderLevel: 20,
+    costPrice: 62.5,
+    sellingPrice: 95,
+    batchNo: 'FN1-2403',
+    expiryDate: '2027-02-28',
+    imageUrl: '/products/finasteride-tablets.svg',
+  },
+  {
+    id: '8901234560035',
+    name: 'Biotin + multivitamin capsules (30)',
+    company: 'Sun Pharma',
+    type: 'Capsule',
+    stockQuantity: 60,
+    reorderLevel: 20,
+    costPrice: 310,
+    sellingPrice: 425,
+    batchNo: 'BTN-2311',
+    expiryDate: '2026-11-15',
+    imageUrl: '/products/biotin-capsules.svg',
+  },
+  {
+    id: '8901234560042',
+    name: 'Ketoconazole 2% anti-dandruff shampoo 100 ml',
+    company: 'Glenmark',
+    type: 'Shampoo',
+    stockQuantity: 0,
+    reorderLevel: 10,
+    costPrice: 245,
+    sellingPrice: 340,
+    batchNo: 'KTZ-2402',
+    expiryDate: '2027-09-30',
+    imageUrl: '/products/ketoconazole-shampoo.svg',
+  },
+  {
+    id: '8901234560059',
+    name: 'Onion & rosemary hair oil 200 ml',
+    company: 'Mamaearth',
+    type: 'Oil',
+    stockQuantity: 25,
+    reorderLevel: 10,
+    costPrice: 299,
+    sellingPrice: 399,
+    batchNo: 'ONR-2405',
+    expiryDate: '2028-04-30',
+    imageUrl: '/products/onion-hair-oil.svg',
+  },
+  {
+    id: '8901234560066',
+    name: 'Argan oil repair conditioner 200 ml',
+    company: 'L’Oréal Professionnel',
+    type: 'Conditioner',
+    stockQuantity: 18,
+    reorderLevel: 8,
+    costPrice: 410,
+    sellingPrice: 560,
+    batchNo: 'ARG-2407',
+    expiryDate: '2028-01-31',
+    imageUrl: '/products/argan-conditioner.svg',
+  },
+  {
+    id: '8901234560073',
+    name: 'Peptide hair growth serum 30 ml',
+    company: 'Minimalist',
+    type: 'Serum',
+    stockQuantity: 14,
+    reorderLevel: 10,
+    costPrice: 520,
+    sellingPrice: 699,
+    batchNo: 'PHS-2404',
+    expiryDate: '2027-04-30',
+    imageUrl: '/products/peptide-serum.svg',
+  },
+  {
+    id: '8901234560080',
+    name: 'Redensyl 3% scalp lotion 100 ml',
+    company: 'Bioderma',
+    type: 'Lotion',
+    stockQuantity: 5,
+    reorderLevel: 6,
+    costPrice: 690,
+    sellingPrice: 899,
+    batchNo: 'RDS-2402',
+    expiryDate: '2026-12-10',
+    imageUrl: '/products/redensyl-lotion.svg',
+  },
+  {
+    id: '8901234560097',
+    name: 'Scalp repair cream 50 g',
+    company: 'Himalaya',
+    type: 'Cream',
+    stockQuantity: 30,
+    reorderLevel: 10,
+    costPrice: 165,
+    sellingPrice: 240,
+    batchNo: 'SRC-2401',
+    expiryDate: '2026-09-20',
+    imageUrl: '/products/scalp-repair-cream.svg',
+  },
+  {
+    id: '8901234560103',
+    name: 'Adapalene 0.1% gel 15 g',
+    company: 'Galderma',
+    type: 'Gel',
+    stockQuantity: 22,
+    reorderLevel: 8,
+    costPrice: 118.75,
+    sellingPrice: 165,
+    batchNo: 'ADP-2405',
+    expiryDate: '2027-08-31',
+    imageUrl: '/products/adapalene-gel.svg',
+  },
+  {
+    id: '8901234560110',
+    name: 'Hair growth root spray 100 ml',
+    company: 'Kerastase',
+    type: 'Spray',
+    stockQuantity: 9,
+    reorderLevel: 5,
+    costPrice: 1450,
+    sellingPrice: 1890,
+    batchNo: 'HGS-2406',
+    expiryDate: '2027-10-31',
+    imageUrl: '/products/hair-growth-spray.svg',
+  },
+  {
+    id: '8901234560127',
+    name: 'Hair vitamin gummies (60)',
+    company: 'Power Gummies',
+    type: 'Supplement',
+    stockQuantity: 36,
+    reorderLevel: 12,
+    costPrice: 540,
+    sellingPrice: 799,
+    batchNo: 'HVG-2408',
+    expiryDate: '2027-03-31',
+    imageUrl: '/products/hair-vitamin-gummies.svg',
+  },
+];
+
 export const seedPatients = demo(demoPatients);
 export const seedAppointments = demo(demoAppointments);
 export const seedTreatments = demo(demoTreatments);
 export const seedInvoices = demo(demoInvoices);
 export const seedPayments = demo(demoPayments);
+export const seedInventory = () => seedInventoryItems;

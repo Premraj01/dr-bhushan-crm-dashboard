@@ -13,6 +13,7 @@ import { RolesGuard } from './auth/roles.guard';
 import { envValidationSchema } from './config/env.validation';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { HealthController } from './health/health.controller';
+import { InventoryModule } from './inventory/inventory.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { LeadsModule } from './leads/leads.module';
 import { PackagesModule } from './packages/packages.module';
@@ -43,6 +44,7 @@ import { UsersModule } from './users/users.module';
     PlansModule,
     PackagesModule,
     DashboardModule,
+    InventoryModule,
     RealtimeModule,
   ],
   controllers: [HealthController],

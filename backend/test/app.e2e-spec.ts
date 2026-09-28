@@ -68,6 +68,90 @@ describe('CRM API (e2e)', () => {
       .expect(403);
   });
 
+  describe('inventory', () => {
+    const product = {
+      itemId: 'TEST-SKU-1',
+      name: 'Peptide hair serum 30 ml',
+      company: 'Test Labs',
+      type: 'Serum',
+      stockQuantity: 12,
+      reorderLevel: 5,
+      costPrice: 350.5,
+      sellingPrice: 499.99,
+      batchNo: 'PS-2409',
+      expiryDate: '2027-09-30',
+    };
+
+    it('adds a product keyed by its SKU and rejects duplicates', async () => {
+      const server = app.getHttpServer();
+      const res = await request(server)
+        .post('/api/inventory')
+        .set(authed())
+        .send(product)
+        .expect(201);
+      expect(res.body).toMatchObject({ id: 'TEST-SKU-1', costPrice: 350.5 });
+      expect(res.body.itemId).toBeUndefined();
+      await request(server)
+        .post('/api/inventory')
+        .set(authed())
+        .send({ ...product, itemId: 'test-sku-1' })
+        .expect(409);
+      await request(server)
+        .post('/api/inventory')
+        .set(authed())
+        .send({ ...product, itemId: 'bad sku/1', costPrice: 1.234 })
+        .expect(400);
+      const list = await request(server)
+        .get('/api/inventory?type=Serum')
+        .set(authed())
+        .expect(200);
+      expect(list.body.map((i: { id: string }) => i.id)).toContain(
+        'TEST-SKU-1',
+      );
+    });
+
+    it('adjusts stock without letting it go negative', async () => {
+      const server = app.getHttpServer();
+      const res = await request(server)
+        .post('/api/inventory/TEST-SKU-1/stock')
+        .set(authed())
+        .send({ change: -4 })
+        .expect(200);
+      expect(res.body.stockQuantity).toBe(8);
+      await request(server)
+        .post('/api/inventory/TEST-SKU-1/stock')
+        .set(authed())
+        .send({ change: -9 })
+        .expect(400);
+      await request(server)
+        .patch('/api/inventory/TEST-SKU-1')
+        .set(authed())
+        .send({ sellingPrice: 520, imageUrl: null })
+        .expect(200);
+    });
+
+    it('lets any role manage stock but only admins delete', async () => {
+      const server = app.getHttpServer();
+      const reception = (
+        await request(server).post('/api/auth/demo').send({ role: 'Reception' })
+      ).body.accessToken as string;
+      const asReception = { Authorization: `Bearer ${reception}` };
+      await request(server)
+        .post('/api/inventory/TEST-SKU-1/stock')
+        .set(asReception)
+        .send({ change: 10 })
+        .expect(200);
+      await request(server)
+        .delete('/api/inventory/TEST-SKU-1')
+        .set(asReception)
+        .expect(403);
+      await request(server)
+        .delete('/api/inventory/TEST-SKU-1')
+        .set(authed())
+        .expect(204);
+    });
+  });
+
   describe('settings catalog', () => {
     const demoToken = async (role: string) =>
       (await request(app.getHttpServer()).post('/api/auth/demo').send({ role }))

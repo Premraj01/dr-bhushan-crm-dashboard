@@ -34,9 +34,9 @@ export class InMemoryRepository<T extends Entity> {
     return this.items.get(id);
   }
 
-  create(data: NewEntity<T>): T {
+  /** Pass `id` for records keyed by a natural id (e.g. a product's SKU); otherwise one is generated. */
+  create(data: NewEntity<T>, id = `${this.idPrefix}${++this.sequence}`): T {
     const now = new Date().toISOString();
-    const id = `${this.idPrefix}${++this.sequence}`;
     const item = { ...data, id, createdAt: now, updatedAt: now } as T;
     this.items.set(id, item);
     return item;
