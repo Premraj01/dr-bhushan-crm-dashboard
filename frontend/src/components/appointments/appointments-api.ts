@@ -37,7 +37,7 @@ export type Appointment = {
   packageStep?: number | null;
   rescheduledAt?: string;
   checkedInAt?: string | null;
-  completedAt?: string;
+  completedAt?: string | null;
 };
 
 type TeamMember = {
@@ -79,13 +79,14 @@ export const isUpcoming = (a: Pick<Appointment, "status">) =>
 /** Not attended yet and still editable: upcoming, or Missed. */
 export const isOpen = (a: Pick<Appointment, "status">) => isUpcoming(a) || a.status === "Missed";
 
-/** Check-in tick (POST) and undo (DELETE), and "Mark completed". */
+/** Check-in tick (POST) and undo (DELETE), and "Mark completed" (and revoking it). */
 export function useAppointmentStatus() {
   const queryClient = useQueryClient();
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["appointments"] });
     void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     void queryClient.invalidateQueries({ queryKey: ["patients"] }); // last visit
+    void queryClient.invalidateQueries({ queryKey: ["packages"] }); // progress, auto-complete
   };
   const checkIn = useMutation({
     mutationFn: ({ id, undo }: { id: string; undo?: boolean }) =>
@@ -97,7 +98,13 @@ export function useAppointmentStatus() {
       api<Appointment>(`/appointments/${id}/complete`, { method: "POST" }),
     onSuccess: refresh,
   });
-  return { checkIn, complete };
+  // Undo "Mark completed": back to Checked in (reopens a package it had completed).
+  const reopen = useMutation({
+    mutationFn: (id: string) =>
+      api<Appointment>(`/appointments/${id}/complete`, { method: "DELETE" }),
+    onSuccess: refresh,
+  });
+  return { checkIn, complete, reopen };
 }
 
 /** Appointments for a clinic-local month (YYYY-MM) or day (YYYY-MM-DD); refreshes live. */
@@ -142,8 +149,12 @@ export function useAppointmentMonths(months: string[], enabled = true) {
     return () => events.forEach((event) => socket.off(event, refresh));
   }, [queryClient, live]);
 
+  // A multi-day surgery spanning two months comes back in both; keep it once.
+  const byId = new Map<string, Appointment>();
+  for (const query of queries) for (const a of query.data ?? []) byId.set(a.id, a);
+
   return {
-    data: queries.flatMap((query) => query.data ?? []),
+    data: [...byId.values()],
     isPending: enabled && queries.some((query) => query.isPending),
     isError: enabled && queries.some((query) => query.isError),
     isRefetching: queries.some((query) => query.isRefetching),

@@ -798,6 +798,101 @@ describe('CRM API (e2e)', () => {
       });
     });
 
+    it('reopens the package when a completed visit is revoked', async () => {
+      const patientId = await newPatient('Reopen Test');
+      const res = await create(
+        { items: [{ treatmentId: ROLLER }] },
+        patientId,
+      ).expect(201);
+      const pkgId = (res.body as Pkg).id;
+      const visit = (
+        await bookVisit(patientId, 'Derma roller', `${today()}T07:00:00+05:30`)
+      ).body as Apt;
+      await checkInAndComplete(visit.id);
+      expect((await pkgOf(patientId, pkgId)).status).toBe('Completed');
+
+      const reopened = (
+        await request(app.getHttpServer())
+          .delete(`/api/appointments/${visit.id}/complete`)
+          .set(authed())
+          .expect(200)
+      ).body as Apt & { completedAt?: string | null };
+      expect(reopened.status).toBe('Checked in');
+      expect(reopened.completedAt).toBeNull();
+      expect(await pkgOf(patientId, pkgId)).toMatchObject({
+        status: 'Accepted',
+        progress: { done: 0, total: 1 },
+      });
+      // Only a completed visit can be revoked.
+      await request(app.getHttpServer())
+        .delete(`/api/appointments/${visit.id}/complete`)
+        .set(authed())
+        .expect(400);
+    });
+
+    it('updates the graft count once the surgery has started, repricing its bill', async () => {
+      const patientId = await newPatient('Graft Test');
+      const res = await create(
+        { items: [{ treatmentId: FUE, quantity: 2000 }] },
+        patientId,
+      ).expect(201);
+      const pkgId = (res.body as Pkg).id;
+      const setGrafts = (grafts: number) =>
+        request(app.getHttpServer())
+          .patch(`/api/packages/${pkgId}/sessions/0/grafts`)
+          .set(authed())
+          .send({ grafts });
+      // A past day, so the patient can be checked in (the visit shows as Missed until then).
+      await bookStep(pkgId, 0, {
+        startsAt: '2026-01-05T09:00:00+05:30',
+        days: 1,
+      }).expect(201);
+      await setGrafts(2400).expect(400); // not checked in yet
+      const aptId = (await pkgOf(patientId, pkgId)).steps[0].appointmentId!;
+      await request(app.getHttpServer())
+        .post(`/api/appointments/${aptId}/check-in`)
+        .set(authed())
+        .expect(200);
+      await request(app.getHttpServer())
+        .post(`/api/appointments/${aptId}/payments`)
+        .set(authed())
+        .send({ amount: 10_000, method: 'Cash' })
+        .expect(201);
+
+      const pkg = (await setGrafts(2400).expect(200)).body as Pkg;
+      expect(pkg.total).toBe(48_000);
+      expect(pkg.steps[0]).toMatchObject({
+        description: 'FUE hair transplant · 2,400 grafts',
+        amount: 48_000,
+      });
+      expect(pkg.lines).toEqual([
+        expect.objectContaining({ quantity: 2400, amount: 48_000 }),
+      ]);
+      const apt = (await appointment(aptId)) as Apt & { type: string };
+      expect(apt.type).toBe('FUE hair transplant · 2,400 grafts');
+      const bill = (
+        await request(app.getHttpServer())
+          .get(`/api/appointments/${aptId}/billing`)
+          .set(authed())
+          .expect(200)
+      ).body as {
+        total: number;
+        paid: number;
+        balance: number;
+        status: string;
+      };
+      expect(bill).toMatchObject({
+        total: 48_000,
+        paid: 10_000,
+        balance: 38_000,
+        status: 'Partially paid',
+      });
+
+      // Can't go below what's already been received (400 grafts = ₹8,000).
+      await setGrafts(400).expect(400);
+      await setGrafts(10_001).expect(400);
+    });
+
     it('removes the package’s visits still to come when it is cancelled', async () => {
       const patientId = await newPatient('Cancel Test');
       const res = await create(

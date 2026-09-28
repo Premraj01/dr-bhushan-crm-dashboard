@@ -13,6 +13,7 @@ import type { AuthUser } from '../auth/auth-user';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { BookSessionDto } from './dto/book-session.dto';
 import { CreatePackageDto } from './dto/create-package.dto';
+import { SetGraftsDto } from './dto/set-grafts.dto';
 import { UpdatePackageDto } from './dto/update-package.dto';
 import { PackagesService } from './packages.service';
 
@@ -71,5 +72,15 @@ export class PackagesController {
     @Body() dto: BookSessionDto,
   ) {
     return this.packages.bookSession(id, index, dto);
+  }
+
+  /** Actual graft count for a surgery step, once the patient is checked in or it's done. */
+  @Patch('packages/:id/sessions/:index/grafts')
+  setGrafts(
+    @Param('id') id: string,
+    @Param('index', ParseIntPipe) index: number,
+    @Body() dto: SetGraftsDto,
+  ) {
+    return this.packages.setGrafts(id, index, dto.grafts);
   }
 }

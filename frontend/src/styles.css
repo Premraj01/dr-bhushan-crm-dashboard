@@ -209,6 +209,14 @@ main{max-width:1540px;margin:0 auto;padding:29px 30px 42px}.page-header{display:
 .timeline i.tl-surgery{background:var(--warning)}
 .timeline i.tl-upcoming,.timeline i.tl-free{background:var(--card);box-shadow:inset 0 0 0 1.5px var(--primary)}
 .timeline i.tl-free{box-shadow:inset 0 0 0 1.5px var(--success)}
+/* Long plans scroll inside the timeline; the heading stays put and the current step is highlighted. */
+.timeline{position:relative;max-height:min(340px,45vh);overflow-y:auto;overscroll-behavior:contain;border:1px solid var(--border);border-radius:5px;padding:0 12px 4px}
+.timeline>h3{position:sticky;top:0;z-index:1;margin:0 -12px 10px;border-bottom:1px solid var(--border);background:var(--background);padding:10px 12px}
+.timeline>div.tl-current{min-height:0;margin:0 -12px 8px;border-radius:4px;background:var(--teal-soft);padding:9px 12px}
+.timeline>div.tl-current>p{margin:0}
+.timeline>div.tl-current>span,.timeline>div.tl-current strong{color:var(--primary);font-weight:700}
+.dark .timeline>div.tl-current>span,.dark .timeline>div.tl-current strong{color:var(--foreground)}
+.timeline>div.tl-current i{outline:3px solid color-mix(in oklab,var(--primary) 22%,transparent)}
 
 /* Package builder → schedule */
 .schedule-steps{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
@@ -537,3 +545,8 @@ button.agenda-row:disabled{cursor:default}
 @media(max-width:760px){.clinic-timings-body{padding:14px}.clinic-hours-overview{grid-template-columns:38px minmax(0,1fr)}.clinic-timings-actions{align-items:stretch;flex-direction:column}.clinic-timings-actions button{width:100%}.clinic-day-row{grid-template-columns:minmax(0,1fr) 40px;gap:10px;padding:13px}.clinic-day-row label{min-width:0}.clinic-day-row label:nth-of-type(1){grid-column:1}.clinic-day-row label:nth-of-type(2){grid-column:2}.clinic-time-separator{display:none}.clinic-day-row input{min-width:0}.clinic-day-summary{display:block;grid-column:1/-1;justify-self:start}.clinic-closure-form{grid-template-columns:1fr 1fr;padding:12px}.clinic-closure-reason{grid-column:1/-1}.clinic-closure-form button{grid-column:1/-1;width:100%}.clinic-timings-footer{align-items:stretch;flex-direction:column}.clinic-timings-footer button{width:100%}}
 .affected-title{display:flex;align-items:center;gap:8px}.affected-title svg{width:18px;flex:none;color:var(--warning)}.affected-list{max-height:280px;margin:0;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:0;list-style:none}.affected-list li{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--border);padding:10px 12px}.affected-list li:last-child{border-bottom:0}.affected-list strong,.affected-list span{display:block}.affected-list strong{font-size:12px}.affected-list span{margin-top:3px;color:var(--muted-foreground);font-size:10px}.affected-when{text-align:right}.affected-when span{color:var(--warning)}
 @media(max-width:560px){.affected-list li{align-items:flex-start;flex-direction:column;gap:6px}.affected-when{text-align:left}}
+/* Appointment details: actual graft count after surgery */
+.actual-grafts{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px 12px;margin-top:12px;border:1px solid color-mix(in oklab,var(--warning) 35%,var(--border));border-radius:6px;background:color-mix(in oklab,var(--warning-soft) 55%,var(--card));padding:12px}.actual-grafts strong,.actual-grafts small{display:block}.actual-grafts strong{font-size:12px}.actual-grafts small{margin-top:3px;color:var(--muted-foreground);font-size:10px}.actual-grafts-edit{display:flex;align-items:center;gap:8px}.actual-grafts-edit input{width:110px;min-height:36px;border:1px solid var(--input);border-radius:5px;background:var(--background);padding:5px 8px;color:var(--foreground);font:700 13px var(--font-heading);outline:0}.actual-grafts-edit input:focus{border-color:var(--ring)}.actual-grafts>.actual-grafts-preview,.actual-grafts>.actual-grafts-saved,.actual-grafts>.banner{grid-column:1/-1;margin:0}.actual-grafts>.actual-grafts-preview{color:var(--foreground);font-weight:600}.actual-grafts>.actual-grafts-saved{color:var(--success);font-weight:600}
+@media(max-width:560px){.actual-grafts{grid-template-columns:1fr}.actual-grafts-edit input{flex:1}}
+/* Dashboard: upcoming surgeries (shares the pending-bookings row layout) */
+@media (min-width:761px){.upcoming-surgery .pending-rank{display:grid;place-items:center;color:var(--warning)}}.upcoming-surgery .pending-rank svg{width:14px}.upcoming-surgery small b{color:var(--foreground);font-weight:700}

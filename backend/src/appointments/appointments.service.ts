@@ -14,6 +14,7 @@ import { seedAppointments } from '../seed/seed-data';
 import {
   APPOINTMENT_BOOKED,
   APPOINTMENT_COMPLETED,
+  APPOINTMENT_REOPENED,
   Appointment,
 } from './appointment.entity';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
@@ -31,7 +32,7 @@ export class AppointmentsService
     events: EventEmitter2,
     private readonly patients: PatientsService,
   ) {
-    super(events, 'appointment', 'APT-', seedAppointments);
+    super(events, 'appointment', 'APT-', seedAppointments());
   }
 
   /** Re-check for missed visits every 10 minutes so open screens update after midnight. */
@@ -230,6 +231,26 @@ export class AppointmentsService
     // Lets PackagesService close packages whose every step is done.
     this.events.emit(APPOINTMENT_COMPLETED, done);
     return this.findOne(id);
+  }
+
+  /** Undo "Mark completed" (e.g. clicked too early): back to Checked in. */
+  reopen(id: string): Appointment {
+    const a = this.findOne(id);
+    if (a.status !== 'Completed')
+      throw new BadRequestException('This appointment isn’t completed');
+    // Completion is only allowed from Checked in, so that is always the previous status.
+    const reopened = super.update(id, {
+      status: 'Checked in',
+      completedAt: null,
+    });
+    // Lets PackagesService reopen a package this visit had completed.
+    this.events.emit(APPOINTMENT_REOPENED, reopened);
+    return this.findOne(id);
+  }
+
+  /** A package session's name follows its step, e.g. after the graft count is updated. */
+  renameForPackage(id: string, type: string): Appointment {
+    return super.update(id, { type });
   }
 
   /** Books a session from a treatment package (see PackagesService). */

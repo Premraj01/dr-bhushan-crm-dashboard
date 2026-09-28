@@ -8,6 +8,7 @@ import {
   IndianRupee,
   Lock,
   LoaderCircle,
+  Undo2,
   UserPlus,
   UserRound,
   X,
@@ -16,6 +17,7 @@ import { Banner } from "@/components/crm-ui";
 import {
   usePatients,
   usePackages,
+  useSetGrafts,
   stepForBooking,
   clinicToday,
   formatDay,
@@ -260,9 +262,11 @@ function AppointmentForm({
   const [time, setTime] = useState(() =>
     appointment ? clinicTimeOf(appointment.startsAt) : "10:00",
   );
-  const [treatmentName, setTreatmentName] = useState(
-    appointment?.type ?? sessionStep?.description ?? "Consultation",
-  );
+  // Follows the appointment until the user picks another treatment, so a rename made
+  // elsewhere (e.g. the actual graft count) isn't undone by saving this form.
+  const [pickedTreatment, setTreatmentName] = useState<string | null>(null);
+  const treatmentName =
+    pickedTreatment ?? appointment?.type ?? sessionStep?.description ?? "Consultation";
   const [days, setDays] = useState(appointment?.days ?? 1);
   const [doctor, setDoctor] = useState(() => {
     if (appointment) return appointment.doctor;
@@ -271,7 +275,7 @@ function AppointmentForm({
   });
   const [notes, setNotes] = useState(appointment?.notes ?? "");
   const [touched, setTouched] = useState(false);
-  const { complete } = useAppointmentStatus();
+  const { complete, reopen } = useAppointmentStatus();
   // Once the patient is checked in (or done) the slot is history — no rescheduling.
   // Missed visits stay open: reschedule them, or check the patient in.
   const locked = !!appointment && !isOpen(appointment);
@@ -280,22 +284,6 @@ function AppointmentForm({
     !!appointment &&
     !locked &&
     (date !== clinicDateOf(appointment.startsAt) || time !== clinicTimeOf(appointment.startsAt));
-
-  // New and moved visits must fall within Settings → Clinic timings; untouched ones keep their slot.
-  const timings = useClinicTimings();
-  const closures = useClinicClosures();
-  const dayHours = date ? hoursOn(timings, date) : null;
-  const dayClosure = date ? closureOn(closures, date) : undefined;
-  const hoursError =
-    !dayHours || !time || locked || (appointment && !reschedulingNow)
-      ? null
-      : dayClosure
-        ? `The clinic is closed on ${formatDay(date)} (${dayClosure.reason}). Pick another date.`
-        : !dayHours.open
-          ? `The clinic is closed on ${dayHours.day}s. Pick another date.`
-          : time < dayHours.opensAt || time >= dayHours.closesAt
-            ? `Pick a time between ${formatTime(dayHours.opensAt)} and ${formatTime(dayHours.closesAt)} (clinic hours on ${dayHours.day}s).`
-            : null;
 
   // A new visit for a treatment in the patient's plan takes that step (linked by the server).
   const chosenPatientId =
@@ -317,11 +305,31 @@ function AppointmentForm({
   const treatment = activeTreatments.find((t) => t.name === treatmentName);
   // Surgery (treatments tagged surgical in Settings) can take 1–3 days.
   const surgeryOption = activeTreatments.find((t) => t.surgical);
+  // A saved surgery always has `days` (as on the backend) — even 1-day ones, and package
+  // surgeries whose type is the step's description rather than a treatment name.
   const isSurgery =
     !!sessionStep?.surgery ||
-    (appointment?.days ?? 1) > 1 ||
+    appointment?.days !== undefined ||
     (!sessionStep && !!treatment?.surgical);
   const maxDays = Math.min(3, (treatment ?? surgeryOption)?.durationMax ?? 3);
+
+  // New and moved visits must fall within Settings → Clinic timings; untouched ones keep their slot.
+  // Surgery can start at any time of day, but not on a closed day or holiday.
+  const timings = useClinicTimings();
+  const closures = useClinicClosures();
+  const dayHours = date ? hoursOn(timings, date) : null;
+  const dayClosure = date ? closureOn(closures, date) : undefined;
+  const checkTime = dayHours?.open && !dayClosure && !isSurgery;
+  const hoursError =
+    !dayHours || !time || locked || (appointment && !reschedulingNow)
+      ? null
+      : dayClosure
+        ? `The clinic is closed on ${formatDay(date)} (${dayClosure.reason}). Pick another date.`
+        : !dayHours.open
+          ? `The clinic is closed on ${dayHours.day}s. Pick another date.`
+          : checkTime && (time < dayHours.opensAt || time >= dayHours.closesAt)
+            ? `Pick a time between ${formatTime(dayHours.opensAt)} and ${formatTime(dayHours.closesAt)} (clinic hours on ${dayHours.day}s).`
+            : null;
   // Warn before submitting if the "new" patient's number is already on file.
   const duplicate =
     choice?.kind === "new" && phoneKey(newPhone).length >= 10
@@ -370,12 +378,12 @@ function AppointmentForm({
           }),
         });
       }
-      const treatmentChanged = treatmentName !== appointment.type;
+      const treatmentChanged = pickedTreatment !== null && pickedTreatment !== appointment.type;
       return api<Appointment>(`/appointments/${appointment.id}`, {
         method: "PATCH",
         body: JSON.stringify({
           ...patientPart(),
-          type: treatmentName,
+          ...(treatmentChanged && { type: treatmentName }),
           doctor: chosenDoctor,
           startsAt,
           notes: notes.trim(),
@@ -493,7 +501,7 @@ function AppointmentForm({
           <div className="status-flow-action">
             <small>
               {appointment.status === "Completed"
-                ? "Visit completed — the appointment can no longer be edited."
+                ? "Visit completed — the appointment can no longer be edited. Marked completed by mistake? Revoke it."
                 : appointment.status === "Checked in"
                   ? "Patient is here. Mark completed when the visit is done."
                   : appointment.status === "Missed"
@@ -513,16 +521,38 @@ function AppointmentForm({
                 Mark completed
               </Button>
             )}
+            {appointment.status === "Completed" && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={reopen.isPending}
+                onClick={() => reopen.mutate(appointment.id)}
+              >
+                {reopen.isPending ? <LoaderCircle className="animate-spin" /> : <Undo2 />}
+                Revoke completion
+              </Button>
+            )}
           </div>
-          {complete.isError && (
+          {(complete.error ?? reopen.error) && (
             <Banner tone="error">
-              {complete.error instanceof ApiError
-                ? complete.error.message
+              {(complete.error ?? reopen.error) instanceof ApiError
+                ? (complete.error ?? reopen.error)?.message
                 : "Couldn’t update the status."}
             </Banner>
           )}
         </div>
       )}
+      {appointment?.packageId &&
+        appointment.patientId &&
+        appointment.packageStep != null &&
+        (appointment.status === "Checked in" || appointment.status === "Completed") && (
+          <ActualGrafts
+            patientId={appointment.patientId}
+            packageId={appointment.packageId}
+            index={appointment.packageStep}
+          />
+        )}
       {/* Completed visits are read-only: every field is disabled. */}
       <fieldset className="form-lock" disabled={readOnly}>
         <div className="form-grid mt-4">
@@ -711,8 +741,7 @@ function AppointmentForm({
               required
               type="time"
               step={900}
-              {...(dayHours?.open &&
-                !dayClosure && { min: dayHours.opensAt, max: dayHours.closesAt })}
+              {...(checkTime && dayHours && { min: dayHours.opensAt, max: dayHours.closesAt })}
               aria-invalid={!!hoursError}
               disabled={locked}
               value={time}
@@ -837,6 +866,94 @@ function untilLabel(date: string, days: number): string {
 }
 
 /** After a plan visit is completed: what's next in the plan ("Schedule surgery" when it's surgery). */
+const grafts = new Intl.NumberFormat("en-IN");
+const rupees = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  maximumFractionDigits: 0,
+});
+
+/**
+ * The graft count in a package is an estimate; the real number is known once the surgery
+ * is under way or done. Updating it reprices the surgery, the package and its bill.
+ */
+function ActualGrafts({
+  patientId,
+  packageId,
+  index,
+}: {
+  patientId: string;
+  packageId: string;
+  index: number;
+}) {
+  const { data } = usePackages(patientId);
+  const step = data?.find((p) => p.id === packageId)?.steps[index];
+  const setGrafts = useSetGrafts(patientId);
+  const [value, setValue] = useState("");
+  const [saved, setSaved] = useState<string | null>(null);
+  if (!step || step.unit !== "graft") return null;
+
+  const count = Number(value);
+  const valid = Number.isInteger(count) && count >= 1 && count <= 10_000;
+  const changed = valid && count !== step.quantity;
+  const save = () =>
+    setGrafts.mutate(
+      { packageId, index, grafts: count },
+      {
+        onSuccess: () => {
+          setSaved(`Updated to ${grafts.format(count)} grafts.`);
+          setValue("");
+        },
+      },
+    );
+
+  return (
+    <div className="actual-grafts">
+      <div>
+        <strong>Actual grafts</strong>
+        <small>
+          Package: {grafts.format(step.quantity)} grafts ·{" "}
+          {step.complimentary ? "complimentary" : rupees.format(step.amount)}
+          {!step.complimentary && ` (${rupees.format(step.unitPrice)} per graft)`}
+        </small>
+      </div>
+      <div className="actual-grafts-edit">
+        <input
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={10_000}
+          placeholder={String(step.quantity)}
+          aria-label="Actual number of grafts"
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setSaved(null);
+            setGrafts.reset();
+          }}
+        />
+        <Button type="button" size="sm" disabled={!changed || setGrafts.isPending} onClick={save}>
+          {setGrafts.isPending && <LoaderCircle className="animate-spin" />}
+          Update grafts
+        </Button>
+      </div>
+      {changed && !step.complimentary && (
+        <small className="actual-grafts-preview">
+          New surgery price: {rupees.format(count * step.unitPrice)}
+        </small>
+      )}
+      {saved && <small className="actual-grafts-saved">{saved}</small>}
+      {setGrafts.error && (
+        <Banner tone="error">
+          {setGrafts.error instanceof ApiError
+            ? setGrafts.error.message
+            : "Couldn’t update the grafts."}
+        </Banner>
+      )}
+    </div>
+  );
+}
+
 function NextVisitCallout({
   patientId,
   packageId,

@@ -13,7 +13,7 @@ export class TreatmentsService extends CrudService<Treatment> {
     events: EventEmitter2,
     private readonly patients: PatientsService,
   ) {
-    super(events, 'treatment', 'TR-', seedTreatments);
+    super(events, 'treatment', 'TR-', seedTreatments());
   }
 
   list(): Treatment[] {

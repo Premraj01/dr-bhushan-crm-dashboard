@@ -4,6 +4,8 @@ import { Entity } from '../common/entity';
 export const APPOINTMENT_BOOKED = 'appointment.booked';
 /** Internal event: a visit was completed (PackagesService closes finished packages). */
 export const APPOINTMENT_COMPLETED = 'appointment.completed';
+/** Internal event: "Mark completed" was undone (PackagesService reopens the package). */
+export const APPOINTMENT_REOPENED = 'appointment.reopened';
 
 /**
  * Scheduled (booked) → Rescheduled (date/time moved before the visit)
@@ -41,5 +43,5 @@ export interface Appointment extends Entity {
   /** Last time the date/time was moved while still Scheduled/Rescheduled. */
   rescheduledAt?: string;
   checkedInAt?: string | null;
-  completedAt?: string;
+  completedAt?: string | null;
 }

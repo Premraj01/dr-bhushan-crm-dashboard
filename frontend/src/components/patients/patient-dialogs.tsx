@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ArrowRight, CircleSlash, LoaderCircle, PackagePlus, Pencil } from "lucide-react";
 import { Banner, StatusChip, type Tone } from "@/components/crm-ui";
 import {
@@ -190,7 +190,20 @@ type TimelineEntry = {
   title: string;
   caption: string;
   tone: "created" | "done" | "upcoming" | "free" | "surgery" | "pending" | "missed";
+  /** The patient is in the clinic for this session right now. */
+  inClinic?: boolean;
 };
+
+/**
+ * Where the treatment stands: the session in progress, else the first one still to do
+ * (missed, booked or due). Falls back to the latest entry once everything is done.
+ */
+function currentIndex(entries: TimelineEntry[]): number {
+  const inClinic = entries.findIndex((e) => e.inClinic);
+  if (inClinic >= 0) return inClinic;
+  const next = entries.findIndex((e) => e.tone !== "done" && e.tone !== "created");
+  return next >= 0 ? next : entries.length - 1;
+}
 
 /** Clinic visits, package creation and every scheduled session, oldest first. */
 function TreatmentTimeline({
@@ -241,15 +254,29 @@ function TreatmentTimeline({
                   : s.complimentary
                     ? "free"
                     : "upcoming",
+        inClinic: s.state === "in-clinic",
       })),
     ),
   ];
   // Stable sort keeps "Package created" ahead of a same-day first session.
   // Unbooked sessions go last.
   entries.sort((a, b) => (a.date || "9999").localeCompare(b.date || "9999"));
+  const current = currentIndex(entries);
+
+  // Long plans scroll inside the timeline; start with the current step in view.
+  const listRef = useRef<HTMLDivElement>(null);
+  const currentRef = useRef<HTMLDivElement>(null);
+  const currentEntry = entries[current];
+  const currentKey = currentEntry ? `${currentEntry.date}-${currentEntry.title}` : "";
+  useEffect(() => {
+    const list = listRef.current;
+    const row = currentRef.current;
+    if (!list || !row) return;
+    list.scrollTop = row.offsetTop - (list.clientHeight - row.offsetHeight) / 2;
+  }, [patient.id, currentKey]);
 
   return (
-    <div className="timeline">
+    <div className="timeline" ref={listRef}>
       <h3>Treatment timeline</h3>
       {entries.length === 0 && (
         <p className="package-empty">
@@ -257,7 +284,12 @@ function TreatmentTimeline({
         </p>
       )}
       {entries.map((e, i) => (
-        <div key={`${e.date}-${e.title}-${i}`}>
+        <div
+          key={`${e.date}-${e.title}-${i}`}
+          ref={i === current ? currentRef : undefined}
+          className={cn(i === current && "tl-current")}
+          aria-current={i === current ? "step" : undefined}
+        >
           <span>{e.date ? formatDay(e.date) : "To book"}</span>
           <i className={`tl-${e.tone}`} />
           <p>

@@ -9,7 +9,7 @@ import { Patient } from './patient.entity';
 @Injectable()
 export class PatientsService extends CrudService<Patient> {
   constructor(events: EventEmitter2) {
-    super(events, 'patient', 'PT-', seedPatients);
+    super(events, 'patient', 'PT-', seedPatients());
   }
 
   list({ search }: ListPatientsQuery): Patient[] {

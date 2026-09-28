@@ -8,7 +8,7 @@ import { Payment } from './payment.entity';
 @Injectable()
 export class PaymentsService extends CrudService<Payment> {
   constructor(events: EventEmitter2) {
-    super(events, 'payment', 'PAY-', seedPayments);
+    super(events, 'payment', 'PAY-', seedPayments());
   }
 
   forInvoice(invoiceId: string): Payment[] {

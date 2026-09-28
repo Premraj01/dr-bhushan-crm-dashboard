@@ -48,17 +48,22 @@ export async function findAffectedAppointments(
   );
 
   const affected: AffectedAppointment[] = [];
-  for (const appointment of lists.flat()) {
+  // A multi-day surgery spanning two months comes back in both; check it once.
+  const appointments = new Map(lists.flat().map((a) => [a.id, a]));
+  for (const appointment of appointments.values()) {
     if (!isUpcoming(appointment)) continue;
     const first = clinicDateOf(appointment.startsAt);
+    // Surgery (it has `days`) ignores opening hours; only closed days and holidays affect it.
+    const surgery = appointment.days !== undefined;
     // Multi-day surgery is affected if any of its days is.
     for (let i = 0; i < (appointment.days ?? 1); i++) {
       const date = addDays(first, i);
       if (date < today) continue;
+      const time = i === 0 && !surgery ? clinicTimeOf(appointment.startsAt) : null;
       const reason =
         "closure" in change
           ? closureOn([change.closure], date)?.reason
-          : outsideHours(change.timings, date, i === 0 ? clinicTimeOf(appointment.startsAt) : null);
+          : outsideHours(change.timings, date, time);
       if (reason) {
         affected.push({ appointment, date, reason });
         break;

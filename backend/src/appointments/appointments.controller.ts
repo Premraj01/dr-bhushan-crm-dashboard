@@ -61,6 +61,12 @@ export class AppointmentsController {
     return this.appointments.complete(id);
   }
 
+  /** Undo "Mark completed": the visit goes back to Checked in. */
+  @Delete(':id/complete')
+  reopen(@Param('id') id: string) {
+    return this.appointments.reopen(id);
+  }
+
   @Delete(':id')
   @Roles('Admin')
   @HttpCode(204)

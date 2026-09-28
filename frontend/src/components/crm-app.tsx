@@ -18,6 +18,7 @@ import { AppointmentsView, type Scheduling } from "@/components/appointments/app
 import { AppointmentDialog } from "@/components/appointments/book-appointment-dialog";
 import { CheckInTick } from "@/components/appointments/check-in-tick";
 import { PendingBookingsQueue } from "@/components/appointments/pending-bookings";
+import { UpcomingSurgeries } from "@/components/appointments/upcoming-surgeries";
 import { BillingView } from "@/components/billing/billing-view";
 import { RemindersView } from "@/components/reminders/reminders-view";
 import { useDashboardSummary } from "@/components/dashboard/dashboard-api";
@@ -125,6 +126,7 @@ function Dashboard({ onBook, onCalendar, onSchedule, onPatient, onViewPatients, 
         </div>
       </section>
     </div>
+    <UpcomingSurgeries limit={5} onViewAll={onCalendar} onOpenPatient={onPatient} />
     <PendingBookingsQueue limit={5} onViewAll={onCalendar} onSchedule={p => onSchedule({ id: p.packageId, patientId: p.patientId }, p.stepIndex)} />
     <section className="panel"><SectionHeader title="Recent patients" subtitle="Latest clinic activity" trailing={<Button variant="ghost" onClick={onViewPatients}>View all<ChevronRight /></Button>} /><PatientRecords query={patientsQuery} limit={4} onSelect={onPatient} /></section>
   </>;

@@ -7,6 +7,7 @@ import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import {
   APPOINTMENT_BOOKED,
   APPOINTMENT_COMPLETED,
+  APPOINTMENT_REOPENED,
   type Appointment,
   type AppointmentStatus,
 } from '../appointments/appointment.entity';
@@ -18,6 +19,7 @@ import { AuthUser } from '../auth/auth-user';
 import { TreatmentOption } from '../catalog/catalog.entity';
 import { TreatmentCatalogService } from '../catalog/catalog.service';
 import { CrudService } from '../common/crud.service';
+import { InvoicesService } from '../invoices/invoices.service';
 import { addDays, clinicDate } from '../common/dates';
 import { PatientsService } from '../patients/patients.service';
 import { PlansService } from '../plans/plans.service';
@@ -104,6 +106,7 @@ export class PackagesService extends CrudService<TreatmentPackage> {
     private readonly catalog: TreatmentCatalogService,
     private readonly appointments: AppointmentsService,
     private readonly plans: PlansService,
+    private readonly invoices: InvoicesService,
   ) {
     super(events, 'package', 'PKG-', []);
   }
@@ -345,6 +348,69 @@ export class PackagesService extends CrudService<TreatmentPackage> {
     if (!pkg || pkg.status !== 'Accepted') return;
     if (this.view(pkg).steps.every((s) => s.state === 'done'))
       this.update(pkg.id, { status: 'Completed' });
+  }
+
+  /** Undoing a visit's completion reopens the package it had completed. */
+  @OnEvent(APPOINTMENT_REOPENED)
+  onAppointmentReopened(appointment: Appointment) {
+    const pkg = appointment.packageId
+      ? this.findAll().find((p) => p.id === appointment.packageId)
+      : undefined;
+    if (pkg?.status === 'Completed')
+      this.update(pkg.id, { status: 'Accepted' });
+  }
+
+  /**
+   * The graft count agreed in the package is an estimate; the real number is known once
+   * the surgery is under way or done. Reprices the step, the package total and the
+   * surgery's bill, and renames the visit to match.
+   */
+  setGrafts(id: string, index: number, grafts: number): PackageView {
+    const pkg = this.findOne(id);
+    if (pkg.status === 'Cancelled')
+      throw new BadRequestException('This package is cancelled');
+    const step = pkg.steps[index];
+    if (!step) throw new BadRequestException(`${pkg.id} has no step ${index}`);
+    if (step.unit !== 'graft')
+      throw new BadRequestException(
+        `${step.description} isn’t priced per graft`,
+      );
+    const visit = step.appointmentId
+      ? this.appointmentOf(step.appointmentId)
+      : undefined;
+    if (
+      !visit ||
+      (visit.status !== 'Checked in' && visit.status !== 'Completed')
+    ) {
+      throw new BadRequestException(
+        'The graft count can be updated once the patient is checked in for the surgery',
+      );
+    }
+    const name =
+      this.treatment(step.treatmentId)?.name ??
+      step.description.split(' · ')[0];
+    const description = `${name} · ${count.format(grafts)} grafts`;
+    const amount = step.complimentary ? 0 : grafts * step.unitPrice;
+    // Reprice the bill first: it refuses when more was paid than the new total.
+    const invoice = this.invoices
+      .findAll()
+      .find((i) => i.appointmentId === visit.id);
+    if (invoice)
+      this.invoices.reprice(invoice.id, {
+        amount,
+        service: `${description}${step.complimentary ? ' · complimentary' : ''} · ${pkg.id}`,
+      });
+    const steps = pkg.steps.map((s, i) =>
+      i === index ? { ...s, quantity: grafts, description, amount } : s,
+    );
+    const lines = summarizeLines(steps);
+    const updated = this.update(pkg.id, {
+      steps,
+      lines,
+      total: lines.reduce((sum, l) => sum + l.amount, 0),
+    });
+    this.appointments.renameForPackage(visit.id, description);
+    return this.view(updated);
   }
 
   /** Cancelling a package removes its visits that haven't happened yet. */

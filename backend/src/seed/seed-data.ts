@@ -12,6 +12,17 @@ import { User } from '../users/user.entity';
 // Mirrors the mock data the frontend prototype was designed with (Pune clinic, Sept 2026).
 const ist = (local: string) => new Date(`${local}+05:30`).toISOString();
 
+/**
+ * Demo patients and their appointments, treatment records, invoices and payments load only
+ * when SEED_DEMO_DATA=true (the e2e tests turn it on). Otherwise the clinic starts empty;
+ * team logins, Settings (treatments, concerns, plans) and leads are always seeded.
+ */
+// Read when each service starts (after .env is loaded), not when this file is imported.
+const demo =
+  <T>(items: T[]) =>
+  (): T[] =>
+    process.env.SEED_DEMO_DATA === 'true' ? items : [];
+
 export const seedTeam: SeedEntity<User>[] = [
   {
     id: 'USR-1',
@@ -47,7 +58,7 @@ export const seedTeam: SeedEntity<User>[] = [
   },
 ];
 
-export const seedPatients: SeedEntity<Patient>[] = [
+const demoPatients: SeedEntity<Patient>[] = [
   {
     id: 'PT-1084',
     createdAt: ist('2026-07-24T10:00:00'),
@@ -100,7 +111,7 @@ export const seedPatients: SeedEntity<Patient>[] = [
   },
 ];
 
-export const seedAppointments: SeedEntity<Appointment>[] = [
+const demoAppointments: SeedEntity<Appointment>[] = [
   {
     id: 'APT-501',
     patientId: 'PT-1084',
@@ -190,7 +201,7 @@ export const seedLeads: SeedEntity<Lead>[] = [
   },
 ];
 
-export const seedTreatments: SeedEntity<Treatment>[] = [
+const demoTreatments: SeedEntity<Treatment>[] = [
   {
     id: 'TR-701',
     patientId: 'PT-1084',
@@ -250,7 +261,7 @@ export const seedTreatments: SeedEntity<Treatment>[] = [
   },
 ];
 
-export const seedInvoices: SeedEntity<Invoice>[] = [
+const demoInvoices: SeedEntity<Invoice>[] = [
   {
     id: 'INV-26091',
     patientId: 'PT-1083',
@@ -512,7 +523,7 @@ export const seedConcernOptions: SeedEntity<ConcernOption>[] = [
 
 // Payments behind the invoices seeded as Paid, so they show under Billing → Received.
 const reception = { id: 'USR-3', name: 'Priya More' };
-export const seedPayments: SeedEntity<Payment>[] = [
+const demoPayments: SeedEntity<Payment>[] = [
   {
     id: 'PAY-1',
     invoiceId: 'INV-26091',
@@ -546,3 +557,9 @@ export const seedPayments: SeedEntity<Payment>[] = [
     receivedAt: ist('2026-09-23T11:05:00'),
   },
 ];
+
+export const seedPatients = demo(demoPatients);
+export const seedAppointments = demo(demoAppointments);
+export const seedTreatments = demo(demoTreatments);
+export const seedInvoices = demo(demoInvoices);
+export const seedPayments = demo(demoPayments);

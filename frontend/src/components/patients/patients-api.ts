@@ -139,6 +139,36 @@ export function useCreatePackage(patientId: string) {
   });
 }
 
+/**
+ * Actual graft count for a package's surgery step, once the patient is checked in or the
+ * surgery is done. Reprices the step, the package and the surgery's bill.
+ */
+export function useSetGrafts(patientId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      packageId,
+      index,
+      grafts,
+    }: {
+      packageId: string;
+      index: number;
+      grafts: number;
+    }) =>
+      api<TreatmentPackage>(`/packages/${packageId}/sessions/${index}/grafts`, {
+        method: "PATCH",
+        body: JSON.stringify({ grafts }),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["packages", patientId] });
+      // The visit is renamed and its bill repriced.
+      void queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      void queryClient.invalidateQueries({ queryKey: ["billing"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+  });
+}
+
 export function useSetPackageStatus(patientId: string) {
   const queryClient = useQueryClient();
   return useMutation({

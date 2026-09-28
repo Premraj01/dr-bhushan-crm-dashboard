@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CrudService } from '../common/crud.service';
 import { clinicDate } from '../common/dates';
@@ -27,7 +27,7 @@ export class InvoicesService extends CrudService<Invoice> {
     private readonly patients: PatientsService,
   ) {
     // Continues the INV-26091 numbering used by the seed data.
-    super(events, 'invoice', 'INV-', seedInvoices);
+    super(events, 'invoice', 'INV-', seedInvoices());
   }
 
   list({ status }: ListInvoicesQuery): Invoice[] {
@@ -82,6 +82,37 @@ export class InvoicesService extends CrudService<Invoice> {
   /** Sets (or with null, removes) the invoice's EMI plan. */
   setEmi(id: string, emi: Invoice['emi']): Invoice {
     return super.update(id, { emi });
+  }
+
+  /**
+   * New price for an open bill (a surgery's actual graft count). Refused when more has
+   * already been received, or while an EMI plan is split over the old balance.
+   */
+  reprice(
+    id: string,
+    { amount, service }: { amount: number; service: string },
+  ): Invoice {
+    const invoice = this.findOne(id);
+    if (amount === invoice.amount) return super.update(id, { service });
+    if (amount < invoice.paid) {
+      throw new BadRequestException(
+        `${inr.format(invoice.paid)} has already been received on ${invoice.id} — more than the new total of ${inr.format(amount)}`,
+      );
+    }
+    if (invoice.emi) {
+      throw new BadRequestException(
+        `${invoice.id} is being paid in EMIs. Remove the EMI plan first, then set it up again for the new amount`,
+      );
+    }
+    const status =
+      invoice.paid >= amount
+        ? 'Paid'
+        : invoice.paid > 0
+          ? 'Partially paid'
+          : invoice.status === 'Paid' || invoice.status === 'Partially paid'
+            ? 'Pending'
+            : invoice.status;
+    return super.update(id, { amount, service, status });
   }
 
   /** Adds a received payment to the invoice and settles its status. */
