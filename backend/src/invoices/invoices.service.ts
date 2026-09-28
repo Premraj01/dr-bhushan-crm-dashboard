@@ -12,7 +12,7 @@ import { seedInvoices } from '../seed/seed-data';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { ListInvoicesQuery } from './dto/list-invoices.query';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
-import { Invoice } from './invoice.entity';
+import { INVOICE_CHANGED, Invoice } from './invoice.entity';
 
 const inr = new Intl.NumberFormat('en-IN', {
   style: 'currency',
@@ -123,6 +123,12 @@ export class InvoicesService extends CrudService<Invoice> {
     const updated = super.update(id, { paid, status });
     this.notifyPaid(updated, amount);
     return updated;
+  }
+
+  /** Also tells AppointmentsService, so a visit shows whether its bill is paid. */
+  protected override publish(action: string, data: unknown) {
+    super.publish(action, data);
+    if (action !== 'deleted') this.events.emit(INVOICE_CHANGED, data);
   }
 
   /** Drives the "Payment received" entry in the dashboard's notification bell. */

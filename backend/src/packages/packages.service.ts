@@ -401,7 +401,9 @@ export class PackagesService extends CrudService<TreatmentPackage> {
         service: `${description}${step.complimentary ? ' · complimentary' : ''} · ${pkg.id}`,
       });
     const steps = pkg.steps.map((s, i) =>
-      i === index ? { ...s, quantity: grafts, description, amount } : s,
+      i === index
+        ? { ...s, quantity: grafts, actualGrafts: grafts, description, amount }
+        : s,
     );
     const lines = summarizeLines(steps);
     const updated = this.update(pkg.id, {

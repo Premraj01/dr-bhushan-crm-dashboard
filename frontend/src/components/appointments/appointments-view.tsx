@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, RefreshCw, Scissors } from "lucide-react";
-import { Banner, PageHeader, SectionHeader, StatusChip } from "@/components/crm-ui";
+import { Banner, PageHeader, SectionHeader } from "@/components/crm-ui";
+import { AppointmentChips } from "@/components/appointments/appointment-chips";
 import {
   addDays,
   addMonths,
@@ -20,7 +21,6 @@ import {
 } from "@/lib/clinic-timings";
 import { cn } from "@/lib/utils";
 import {
-  appointmentTone,
   clinicDateOf,
   clinicTimeOf,
   useAppointmentMonths,
@@ -488,7 +488,7 @@ export function AppointmentsView({
                             : ` · ${a.durationMinutes} min`}
                       </span>
                     </div>
-                    <StatusChip tone={appointmentTone(a.status)}>{a.status}</StatusChip>
+                    <AppointmentChips appointment={a} />
                   </button>
                 </div>
               ))}

@@ -414,6 +414,8 @@ button.agenda-row:disabled{cursor:default}
 .metric-trend span.trend-down{color:var(--destructive)}
 .donut.donut-empty{background:var(--secondary)}
 .progress-note{display:block;margin-top:8px;color:var(--muted-foreground);font-size:10px}
+.progress-note-warning{margin-top:4px;color:var(--warning);font-weight:600}
+.chip-stack{display:inline-flex;flex-wrap:wrap;justify-content:flex-end;gap:4px}
 .progress-fill{transition:width .4s ease}
 .notification-empty{margin:0;padding:14px 10px;color:var(--muted-foreground);font-size:11px;line-height:1.5}
 .support.support-down>span{background:color-mix(in oklab,var(--destructive) 22%,transparent);color:var(--destructive)}

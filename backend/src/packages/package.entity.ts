@@ -45,6 +45,11 @@ export interface PackageStep {
   note?: string;
   /** The booked visit, once there is one. */
   appointmentId?: string;
+  /**
+   * Grafts actually transplanted, entered once the surgery is under way or done
+   * (PackagesService.setGrafts). `quantity` before then is only the estimate.
+   */
+  actualGrafts?: number;
 }
 
 /** A treatment plan applied to a patient, with its prices. */

@@ -1,4 +1,5 @@
 import { Entity } from '../common/entity';
+import { InvoiceStatus } from '../invoices/invoice.entity';
 
 /** Internal event: an appointment was booked (PackagesService links it to a package step). */
 export const APPOINTMENT_BOOKED = 'appointment.booked';
@@ -44,4 +45,9 @@ export interface Appointment extends Entity {
   rescheduledAt?: string;
   checkedInAt?: string | null;
   completedAt?: string | null;
+  /**
+   * Status of this visit's own bill (null/absent: not billed). Completing a chargeable
+   * visit opens its bill as Pending, so a completed visit that isn't paid shows as pending.
+   */
+  billStatus?: InvoiceStatus | null;
 }

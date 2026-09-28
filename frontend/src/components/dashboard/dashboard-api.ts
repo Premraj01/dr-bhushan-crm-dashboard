@@ -16,8 +16,19 @@ export type DashboardSummary = {
     today: number;
     billedThisMonth: number;
     outstanding: number;
+    /** Completed visits not yet paid in full, and what's still owed on them. */
+    unpaidVisits: { count: number; amount: number };
   };
   prpSessions: { thisMonth: number; completed: number };
+  /** This month's completed surgeries; grafts only from the count entered after surgery. */
+  grafts: {
+    surgeries: number;
+    /** Completed surgeries still missing their graft count. */
+    awaitingCount: number;
+    total: number;
+    /** Per surgery with a graft count (0 when none). */
+    average: number;
+  };
   treatmentMix: {
     total: number;
     prp: number;
@@ -50,6 +61,8 @@ export function useDashboardSummary() {
       "payment.created",
       "invoice.created",
       "invoice.updated",
+      "invoice.deleted",
+      "package.updated", // graft count set after surgery
     ];
     events.forEach((e) => socket.on(e, refresh));
     return () => events.forEach((e) => socket.off(e, refresh));

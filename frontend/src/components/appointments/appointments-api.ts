@@ -38,6 +38,8 @@ export type Appointment = {
   rescheduledAt?: string;
   checkedInAt?: string | null;
   completedAt?: string | null;
+  /** Status of the visit's own bill (null/absent: not billed). Completing a chargeable visit opens it as Pending. */
+  billStatus?: "Paid" | "Partially paid" | "Pending" | "Overdue" | "Cancelled" | null;
 };
 
 type TeamMember = {
@@ -72,6 +74,17 @@ export function appointmentTone(status: AppointmentStatus): Tone {
   return "neutral";
 }
 
+/** A completed visit whose bill isn't paid in full, shown next to its status. */
+export function paymentChip(
+  a: Pick<Appointment, "status" | "billStatus">,
+): { label: string; tone: Tone } | null {
+  if (a.status !== "Completed") return null;
+  if (a.billStatus === "Pending") return { label: "Payment pending", tone: "warning" };
+  if (a.billStatus === "Partially paid") return { label: "Partly paid", tone: "warning" };
+  if (a.billStatus === "Overdue") return { label: "Payment overdue", tone: "error" };
+  return null;
+}
+
 /** Booked and not yet attended. */
 export const isUpcoming = (a: Pick<Appointment, "status">) =>
   a.status === "Scheduled" || a.status === "Rescheduled";
@@ -87,6 +100,7 @@ export function useAppointmentStatus() {
     void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     void queryClient.invalidateQueries({ queryKey: ["patients"] }); // last visit
     void queryClient.invalidateQueries({ queryKey: ["packages"] }); // progress, auto-complete
+    void queryClient.invalidateQueries({ queryKey: ["billing"] }); // completing opens the visit's bill
   };
   const checkIn = useMutation({
     mutationFn: ({ id, undo }: { id: string; undo?: boolean }) =>
@@ -371,7 +385,7 @@ export function useBillingOverview() {
     if (!live) return;
     const refresh = () => void queryClient.invalidateQueries({ queryKey: ["billing"] });
     const socket = getSocket();
-    const events = ["payment.created", "invoice.created", "invoice.updated"];
+    const events = ["payment.created", "invoice.created", "invoice.updated", "invoice.deleted"];
     events.forEach((e) => socket.on(e, refresh));
     return () => events.forEach((e) => socket.off(e, refresh));
   }, [queryClient, live]);

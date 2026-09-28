@@ -5,6 +5,7 @@ import { addMonths, clinicDate, clinicMonth } from '../common/dates';
 import { InvoicesService } from '../invoices/invoices.service';
 import { PaymentsService } from '../invoices/payments.service';
 import { LeadsService } from '../leads/leads.service';
+import { PackagesService } from '../packages/packages.service';
 import { PatientsService } from '../patients/patients.service';
 
 type TreatmentKind = 'prp' | 'transplant' | 'consultation' | 'other';
@@ -26,6 +27,7 @@ export class DashboardService {
     private readonly leads: LeadsService,
     private readonly invoices: InvoicesService,
     private readonly payments: PaymentsService,
+    private readonly packages: PackagesService,
   ) {}
 
   /** Dashboard figures for the current clinic day and month — all from live records. */
@@ -50,6 +52,41 @@ export class DashboardService {
     const invoices = this.invoices
       .findAll()
       .filter((i) => i.status !== 'Cancelled');
+
+    // Completed visits whose bill is still open (see BillingService.onAppointmentCompleted).
+    const completedIds = new Set(
+      this.appointments
+        .findAll()
+        .filter((a) => a.status === 'Completed')
+        .map((a) => a.id),
+    );
+    const unpaidVisits = invoices.filter(
+      (i) =>
+        i.appointmentId &&
+        completedIds.has(i.appointmentId) &&
+        i.amount > i.paid,
+    );
+
+    // This month's completed per-graft surgeries. Grafts come only from the count
+    // entered after the surgery (`actualGrafts`), never the package's estimate.
+    const appointmentsById = new Map(
+      this.appointments.findAll().map((a) => [a.id, a]),
+    );
+    const surgeries = this.packages
+      .findAll()
+      .flatMap((pkg) => pkg.steps)
+      .filter((s) => s.unit === 'graft' && s.appointmentId)
+      .map((s) => ({
+        grafts: s.actualGrafts,
+        visit: appointmentsById.get(s.appointmentId!),
+      }))
+      .filter(
+        ({ visit }) =>
+          visit?.status === 'Completed' &&
+          clinicMonth(visit.startsAt) === month,
+      );
+    const counted = surgeries.filter((s) => s.grafts);
+    const monthGrafts = counted.reduce((total, s) => total + s.grafts!, 0);
 
     const mix: Record<TreatmentKind, number> = {
       prp: 0,
@@ -86,10 +123,28 @@ export class DashboardService {
           (total, i) => total + Math.max(0, i.amount - i.paid),
           0,
         ),
+        /** Completed visits not yet paid in full, and what's still owed on them. */
+        unpaidVisits: {
+          count: unpaidVisits.length,
+          amount: unpaidVisits.reduce(
+            (total, i) => total + i.amount - i.paid,
+            0,
+          ),
+        },
       },
       prpSessions: {
         thisMonth: prp.length,
         completed: prp.filter((a) => a.status === 'Completed').length,
+      },
+      grafts: {
+        /** Completed surgeries this month (by the day the surgery started). */
+        surgeries: surgeries.length,
+        /** Of those, how many still need their graft count entered. */
+        awaitingCount: surgeries.length - counted.length,
+        /** Grafts entered after surgery, this month. */
+        total: monthGrafts,
+        /** Per surgery with a graft count (0 when none). */
+        average: counted.length ? Math.round(monthGrafts / counted.length) : 0,
       },
       treatmentMix: { total: monthVisits.length, ...mix },
       openLeads: this.leads

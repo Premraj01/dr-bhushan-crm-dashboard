@@ -18,12 +18,13 @@ import { AppointmentsView, type Scheduling } from "@/components/appointments/app
 import { AppointmentDialog } from "@/components/appointments/book-appointment-dialog";
 import { CheckInTick } from "@/components/appointments/check-in-tick";
 import { PendingBookingsQueue } from "@/components/appointments/pending-bookings";
+import { AppointmentChips } from "@/components/appointments/appointment-chips";
 import { UpcomingSurgeries } from "@/components/appointments/upcoming-surgeries";
 import { BillingView } from "@/components/billing/billing-view";
 import { RemindersView } from "@/components/reminders/reminders-view";
 import { useDashboardSummary } from "@/components/dashboard/dashboard-api";
 import { inr } from "@/components/settings/catalog-settings";
-import { appointmentTone, clinicTimeOf, useAppointments } from "@/components/appointments/appointments-api";
+import { clinicTimeOf, useAppointments } from "@/components/appointments/appointments-api";
 import { clinicToday, formatDay } from "@/components/patients/patients-api";
 import { EditPatientDialog, PatientProfileDialog, type EditTab } from "@/components/patients/patient-dialogs";
 import { formatVisit, usePatients, type Patient } from "@/components/patients/patients-api";
@@ -99,18 +100,18 @@ function Dashboard({ onBook, onCalendar, onSchedule, onPatient, onViewPatients, 
     <div className="metrics-grid">
       {!summary ? Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-[118px] w-full" />) : <>
         <MetricCard label="Total patients" value={summary.patients.total.toLocaleString("en-IN")} note={`${summary.patients.newThisMonth} new this month`} icon={Users} />
-        <MetricCard label="Appointments today" value={String(summary.appointmentsToday.total)} note={`${summary.appointmentsToday.scheduled} scheduled · ${summary.appointmentsToday.checkedIn} checked in`} icon={CalendarDays} />
         <MetricCard label="Revenue this month" value={inrShort(summary.revenue.thisMonth)} icon={CircleDollarSign}
           {...(summary.revenue.lastMonth > 0
             ? { note: `${Math.abs(pct(summary.revenue.thisMonth - summary.revenue.lastMonth, summary.revenue.lastMonth))}% vs last month`, trend: summary.revenue.thisMonth >= summary.revenue.lastMonth ? "up" as const : "down" as const }
             : { note: `${inr.format(summary.revenue.today)} received today` })} />
         <MetricCard label="PRP sessions this month" value={String(summary.prpSessions.thisMonth)} note={`${summary.prpSessions.completed} completed`} icon={Activity} />
+        <MetricCard label="Avg grafts this month" value={summary.grafts.total ? summary.grafts.average.toLocaleString("en-IN") : "—"} note={`${summary.grafts.surgeries} ${summary.grafts.surgeries === 1 ? "surgery" : "surgeries"} · ${summary.grafts.total.toLocaleString("en-IN")} grafts this month${summary.grafts.awaitingCount ? ` · ${summary.grafts.awaitingCount} awaiting count` : ""}`} icon={Sparkles} />
       </>}
     </div>
     <div className="dashboard-grid">
       <section className="panel schedule-panel"><SectionHeader title="Today’s schedule" subtitle={todayQuery.data ? `${todays.length} appointments · ${pending} pending` : "Loading…"} trailing={<Button variant="outline" onClick={onCalendar}>View calendar<ChevronRight /></Button>} />
         {todayQuery.isError ? <div className="table-error"><Banner tone="error">Couldn’t load today’s appointments.</Banner></div> : todayQuery.isPending ? <div className="table-loading">{Array.from({length:3},(_,i)=><Skeleton key={i} className="h-10 w-full"/>)}</div> : todays.length === 0 ? <div className="empty-state"><CalendarDays /><h3>No appointments today</h3><p>Sessions booked from packages will appear here.</p></div> :
-        <div className="schedule-list">{todays.slice(0,5).map((item) => <div key={item.id} className="schedule-item"><CheckInTick appointment={item} onNotice={onNotice} /><button className="schedule-row" onClick={()=>item.patientId ? onPatient(item.patientId) : openByName(item.patientName)}><time>{clinicTimeOf(item.startsAt)}</time><span className="schedule-avatar">{initials(item.patientName)}</span><span className="schedule-info"><strong>{item.patientName}</strong><small>{item.type}</small></span><StatusChip tone={appointmentTone(item.status)}>{item.status}</StatusChip><ChevronRight className="row-arrow" /></button></div>)}</div>}
+        <div className="schedule-list">{todays.slice(0,5).map((item) => <div key={item.id} className="schedule-item"><CheckInTick appointment={item} onNotice={onNotice} /><button className="schedule-row" onClick={()=>item.patientId ? onPatient(item.patientId) : openByName(item.patientName)}><time>{clinicTimeOf(item.startsAt)}</time><span className="schedule-avatar">{initials(item.patientName)}</span><span className="schedule-info"><strong>{item.patientName}</strong><small>{item.type}</small></span><AppointmentChips appointment={item} /><ChevronRight className="row-arrow" /></button></div>)}</div>}
       </section>
       <section className="panel"><SectionHeader title="Treatment mix" subtitle={`${monthLabel} · this month’s visits`} />
         <div className="donut-area">
@@ -123,6 +124,7 @@ function Dashboard({ onBook, onCalendar, onSchedule, onPatient, onViewPatients, 
           <div><span>Collected this month</span><strong>{summary ? `${inrShort(summary.revenue.thisMonth)} of ${inrShort(summary.revenue.billedThisMonth)} billed` : "—"}</strong></div>
           <div className="progress-track" role="progressbar" aria-label="Collected vs billed this month" aria-valuenow={collectedPct} aria-valuemin={0} aria-valuemax={100}><span className="progress-fill" style={{ width: `${collectedPct}%` }} /></div>
           {summary && <small className="progress-note">{inr.format(summary.revenue.outstanding)} still to collect in total</small>}
+          {summary && summary.revenue.unpaidVisits.count > 0 && <small className="progress-note progress-note-warning">{summary.revenue.unpaidVisits.count} completed {summary.revenue.unpaidVisits.count === 1 ? "visit" : "visits"} payment pending · {inr.format(summary.revenue.unpaidVisits.amount)}</small>}
         </div>
       </section>
     </div>

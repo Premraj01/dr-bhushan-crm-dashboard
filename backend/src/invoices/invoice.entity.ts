@@ -1,5 +1,8 @@
 import { Entity } from '../common/entity';
 
+/** Internal event: an invoice was opened or changed (AppointmentsService mirrors a visit's bill status). */
+export const INVOICE_CHANGED = 'invoice.changed';
+
 export const INVOICE_STATUSES = [
   'Paid',
   'Partially paid',

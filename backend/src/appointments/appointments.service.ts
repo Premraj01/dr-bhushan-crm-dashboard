@@ -5,10 +5,11 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { CrudService } from '../common/crud.service';
 import { NewEntity } from '../common/entity';
 import { addDays, clinicDate } from '../common/dates';
+import { INVOICE_CHANGED, type Invoice } from '../invoices/invoice.entity';
 import { PatientsService } from '../patients/patients.service';
 import { seedAppointments } from '../seed/seed-data';
 import {
@@ -246,6 +247,20 @@ export class AppointmentsService
     // Lets PackagesService reopen a package this visit had completed.
     this.events.emit(APPOINTMENT_REOPENED, reopened);
     return this.findOne(id);
+  }
+
+  /** Mirrors the visit's bill status (Pending → Partially paid → Paid) onto the visit. */
+  @OnEvent(INVOICE_CHANGED)
+  onInvoiceChanged(invoice: Invoice) {
+    if (invoice.appointmentId)
+      this.setBillStatus(invoice.appointmentId, invoice.status);
+  }
+
+  /** null: the visit has no bill (e.g. an unpaid bill dropped when completion was undone). */
+  setBillStatus(id: string, billStatus: Invoice['status'] | null) {
+    const a = this.repo.findOne(id);
+    if (a && (a.billStatus ?? null) !== billStatus)
+      super.update(id, { billStatus });
   }
 
   /** A package session's name follows its step, e.g. after the graft count is updated. */

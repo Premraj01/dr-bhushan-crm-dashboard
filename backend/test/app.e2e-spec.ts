@@ -842,9 +842,10 @@ describe('CRM API (e2e)', () => {
           .patch(`/api/packages/${pkgId}/sessions/0/grafts`)
           .set(authed())
           .send({ grafts });
-      // A past day, so the patient can be checked in (the visit shows as Missed until then).
+      // The 1st of this month: the patient can be checked in (the visit shows as Missed
+      // until then), and the dashboard counts it as this month's surgery.
       await bookStep(pkgId, 0, {
-        startsAt: '2026-01-05T09:00:00+05:30',
+        startsAt: `${today().slice(0, 7)}-01T09:00:00+05:30`,
         days: 1,
       }).expect(201);
       await setGrafts(2400).expect(400); // not checked in yet
@@ -891,6 +892,59 @@ describe('CRM API (e2e)', () => {
       // Can't go below what's already been received (400 grafts = ₹8,000).
       await setGrafts(400).expect(400);
       await setGrafts(10_001).expect(400);
+
+      // Dashboard: this month's completed surgeries, with grafts only from the count
+      // entered after surgery — never the package's 2,000-graft estimate.
+      type Grafts = {
+        surgeries: number;
+        awaitingCount: number;
+        total: number;
+        average: number;
+      };
+      const grafts = async () =>
+        (
+          (
+            await request(app.getHttpServer())
+              .get('/api/dashboard/summary')
+              .set(authed())
+              .expect(200)
+          ).body as { grafts: Grafts }
+        ).grafts;
+      const before = await grafts();
+      await request(app.getHttpServer())
+        .post(`/api/appointments/${aptId}/complete`)
+        .set(authed())
+        .expect(200);
+      const after = await grafts();
+      expect(after).toMatchObject({
+        surgeries: before.surgeries + 1,
+        awaitingCount: before.awaitingCount,
+        total: before.total + 2400,
+      });
+
+      // A completed surgery without a post-surgery count isn't counted as grafts.
+      const other = await newPatient('Graft Estimate Test');
+      const estimate = (
+        (
+          await create(
+            { items: [{ treatmentId: FUE, quantity: 3000 }] },
+            other,
+          ).expect(201)
+        ).body as Pkg
+      ).id;
+      await bookStep(estimate, 0, {
+        startsAt: `${today().slice(0, 7)}-02T09:00:00+05:30`,
+        days: 1,
+      }).expect(201);
+      await checkInAndComplete(
+        (await pkgOf(other, estimate)).steps[0].appointmentId!,
+      );
+      expect(await grafts()).toMatchObject({
+        surgeries: after.surgeries + 1,
+        awaitingCount: after.awaitingCount + 1,
+        total: after.total,
+        average: after.average,
+      });
     });
 
     it('removes the package’s visits still to come when it is cancelled', async () => {
@@ -1124,6 +1178,75 @@ describe('CRM API (e2e)', () => {
       await call('patch', id, { notes: 'Changed afterwards' }).expect(400);
       await call('patch', id, { doctor: 'Dr. Sonal Desai' }).expect(400);
       await call('post', `${id}/check-in`).expect(400);
+    });
+
+    it('marks a completed, unpaid visit as payment pending', async () => {
+      const call = (method: 'get' | 'post' | 'delete', path: string) =>
+        request(app.getHttpServer())[method](`/api/${path}`).set(authed());
+      type Apt = { id: string; billStatus?: string | null };
+      type Bill = { status: string; balance: number; invoiceId?: string };
+      type Overview = { pending: { invoiceId: string; amount: number }[] };
+      type Summary = {
+        revenue: { unpaidVisits: { count: number; amount: number } };
+      };
+      const unpaid = async () =>
+        ((await call('get', 'dashboard/summary').expect(200)).body as Summary)
+          .revenue.unpaidVisits;
+
+      const id = (
+        (
+          await book({
+            ...slot,
+            patientId: 'PT-1081',
+            startsAt: new Date().toISOString(),
+          }).expect(201)
+        ).body as Apt
+      ).id;
+      await call('post', `appointments/${id}/check-in`).expect(200);
+      const before = await unpaid();
+
+      // Completing the ₹800 consultation opens its bill as Pending
+      const done = (
+        await call('post', `appointments/${id}/complete`).expect(200)
+      ).body as Apt;
+      expect(done.billStatus).toBe('Pending');
+      const bill = (await call('get', `appointments/${id}/billing`).expect(200))
+        .body as Bill;
+      expect(bill).toMatchObject({ status: 'Pending', balance: 800 });
+      const overview = (await call('get', 'billing/overview').expect(200))
+        .body as Overview;
+      expect(overview.pending).toContainEqual(
+        expect.objectContaining({ invoiceId: bill.invoiceId, amount: 800 }),
+      );
+      expect(await unpaid()).toEqual({
+        count: before.count + 1,
+        amount: before.amount + 800,
+      });
+
+      // Undoing completion drops the untouched bill
+      const reopened = (
+        await call('delete', `appointments/${id}/complete`).expect(200)
+      ).body as Apt;
+      expect(reopened.billStatus ?? null).toBeNull();
+      expect(
+        (
+          (await call('get', `appointments/${id}/billing`).expect(200))
+            .body as Bill
+        ).status,
+      ).toBe('Not billed');
+
+      // Complete again and pay in full → Paid, no longer pending
+      await call('post', `appointments/${id}/complete`).expect(200);
+      await request(app.getHttpServer())
+        .post(`/api/appointments/${id}/payments`)
+        .set(authed())
+        .send({ amount: 800, method: 'Cash' })
+        .expect(201);
+      const list = (
+        await call('get', `appointments?patientId=PT-1081`).expect(200)
+      ).body as Apt[];
+      expect(list.find((a) => a.id === id)?.billStatus).toBe('Paid');
+      expect(await unpaid()).toEqual(before);
     });
 
     it('rejects patientId and newPatient together', async () => {

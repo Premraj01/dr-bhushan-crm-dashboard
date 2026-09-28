@@ -3,7 +3,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Appointment } from '../appointments/appointment.entity';
+import { OnEvent } from '@nestjs/event-emitter';
+import {
+  APPOINTMENT_COMPLETED,
+  APPOINTMENT_REOPENED,
+  type Appointment,
+} from '../appointments/appointment.entity';
 import { AppointmentsService } from '../appointments/appointments.service';
 import { AuthUser } from '../auth/auth-user';
 import { TreatmentCatalogService } from '../catalog/catalog.service';
@@ -156,6 +161,31 @@ export class BillingService {
     const invoice = this.existingInvoice(appointment);
     if (invoice?.emi) this.invoices.setEmi(invoice.id, null);
     return this.bill(appointmentId);
+  }
+
+  /**
+   * A completed visit that hasn't been paid is owed: open its bill as Pending so it
+   * shows on the Billing page and in the dashboard's billed/outstanding figures.
+   * Complimentary visits have nothing to pay; a visit without a price in Settings stays
+   * "Not billed" until its charge is entered with the first payment.
+   */
+  @OnEvent(APPOINTMENT_COMPLETED)
+  onAppointmentCompleted(appointment: Appointment) {
+    if (this.existingInvoice(appointment)) return;
+    const session = this.packageSession(appointment);
+    const chargeable = session
+      ? !session.complimentary
+      : this.visitPrice(appointment) > 0;
+    if (chargeable) this.ensureInvoice(appointment);
+  }
+
+  /** Undoing completion drops the bill it opened, as long as nothing has been paid on it. */
+  @OnEvent(APPOINTMENT_REOPENED)
+  onAppointmentReopened(appointment: Appointment) {
+    const invoice = this.existingInvoice(appointment);
+    if (!invoice || invoice.paid > 0 || invoice.emi) return;
+    this.invoices.remove(invoice.id);
+    this.appointments.setBillStatus(appointment.id, null);
   }
 
   /* ---------- from the Billing page (invoice) ---------- */
