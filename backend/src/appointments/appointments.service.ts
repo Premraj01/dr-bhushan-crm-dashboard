@@ -9,6 +9,7 @@ import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { CrudService } from '../common/crud.service';
 import { NewEntity } from '../common/entity';
 import { addDays, clinicDate } from '../common/dates';
+import { InventoryService } from '../inventory/inventory.service';
 import { INVOICE_CHANGED, type Invoice } from '../invoices/invoice.entity';
 import { PatientsService } from '../patients/patients.service';
 import { seedAppointments } from '../seed/seed-data';
@@ -17,7 +18,9 @@ import {
   APPOINTMENT_COMPLETED,
   APPOINTMENT_REOPENED,
   Appointment,
+  DispensedMedicine,
 } from './appointment.entity';
+import { DispenseMedicineDto } from './dto/complete-appointment.dto';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { ListAppointmentsQuery } from './dto/list-appointments.query';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
@@ -32,6 +35,7 @@ export class AppointmentsService
   constructor(
     events: EventEmitter2,
     private readonly patients: PatientsService,
+    private readonly inventory: InventoryService,
   ) {
     super(events, 'appointment', 'APT-', seedAppointments());
   }
@@ -215,8 +219,11 @@ export class AppointmentsService
     });
   }
 
-  /** Visit done. Only after the patient has been checked in. */
-  complete(id: string): Appointment {
+  /**
+   * Visit done. Only after the patient has been checked in. Medicines the doctor
+   * recommended are taken out of inventory and added to the visit's bill.
+   */
+  complete(id: string, medicines: DispenseMedicineDto[] = []): Appointment {
     const a = this.findOne(id);
     if (a.status !== 'Checked in') {
       throw new BadRequestException(
@@ -225,9 +232,11 @@ export class AppointmentsService
           : 'Check the patient in first',
       );
     }
+    const dispensed = this.dispense(medicines);
     const done = super.update(id, {
       status: 'Completed',
       completedAt: new Date().toISOString(),
+      ...(dispensed.length > 0 && { medicines: dispensed }),
     });
     // Lets PackagesService close packages whose every step is done.
     this.events.emit(APPOINTMENT_COMPLETED, done);
@@ -239,14 +248,61 @@ export class AppointmentsService
     const a = this.findOne(id);
     if (a.status !== 'Completed')
       throw new BadRequestException('This appointment isn’t completed');
+    if (
+      a.medicines?.length &&
+      (a.billStatus === 'Paid' || a.billStatus === 'Partially paid')
+    ) {
+      throw new BadRequestException(
+        'Medicines given at this visit have been paid for, so it can’t be reopened',
+      );
+    }
+    // The medicines go back on the shelf (unless the product has since been deleted).
+    for (const m of a.medicines ?? []) {
+      if (this.inventory.findAll().some((i) => i.id === m.itemId))
+        this.inventory.adjustStock(m.itemId, m.quantity);
+    }
     // Completion is only allowed from Checked in, so that is always the previous status.
     const reopened = super.update(id, {
       status: 'Checked in',
       completedAt: null,
+      medicines: null,
     });
     // Lets PackagesService reopen a package this visit had completed.
     this.events.emit(APPOINTMENT_REOPENED, reopened);
     return this.findOne(id);
+  }
+
+  /**
+   * Checks every medicine is in stock and not expired before taking any out, so a
+   * failed completion leaves inventory untouched. The same SKU twice is added together.
+   */
+  private dispense(requested: DispenseMedicineDto[]): DispensedMedicine[] {
+    const quantities = new Map<string, number>();
+    for (const { itemId, quantity } of requested)
+      quantities.set(itemId, (quantities.get(itemId) ?? 0) + quantity);
+    const today = clinicDate();
+    const lines = [...quantities].map(([itemId, quantity]) => {
+      const item = this.inventory.findOne(itemId);
+      if (item.expiryDate < today)
+        throw new BadRequestException(
+          `${item.name} (batch ${item.batchNo}) expired on ${item.expiryDate}`,
+        );
+      if (item.stockQuantity < quantity)
+        throw new BadRequestException(
+          `Only ${item.stockQuantity} of ${item.name} in stock`,
+        );
+      return { item, quantity };
+    });
+    return lines.map(({ item, quantity }) => {
+      this.inventory.adjustStock(item.id, -quantity);
+      return {
+        itemId: item.id,
+        name: item.name,
+        batchNo: item.batchNo,
+        quantity,
+        unitPrice: item.sellingPrice,
+      };
+    });
   }
 
   /** Mirrors the visit's bill status (Pending → Partially paid → Paid) onto the visit. */

@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../auth/roles.decorator';
+import { CompleteAppointmentDto } from './dto/complete-appointment.dto';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { ListAppointmentsQuery } from './dto/list-appointments.query';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
@@ -57,8 +58,8 @@ export class AppointmentsController {
   /** "Mark completed" in the appointment details. */
   @Post(':id/complete')
   @HttpCode(200)
-  complete(@Param('id') id: string) {
-    return this.appointments.complete(id);
+  complete(@Param('id') id: string, @Body() dto: CompleteAppointmentDto) {
+    return this.appointments.complete(id, dto.medicines);
   }
 
   /** Undo "Mark completed": the visit goes back to Checked in. */

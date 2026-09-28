@@ -105,9 +105,8 @@ describe('CRM API (e2e)', () => {
         .get('/api/inventory?type=Serum')
         .set(authed())
         .expect(200);
-      expect(list.body.map((i: { id: string }) => i.id)).toContain(
-        'TEST-SKU-1',
-      );
+      const ids = (list.body as { id: string }[]).map((i) => i.id);
+      expect(ids).toContain('TEST-SKU-1');
     });
 
     it('adjusts stock without letting it go negative', async () => {
@@ -1945,6 +1944,155 @@ describe('CRM API (e2e)', () => {
       });
 
       socket.close();
+    });
+  });
+
+  describe('medicines at completion and invoice PDF', () => {
+    type Line = { kind: string; description: string; amount: number };
+    type Bill = {
+      invoiceId?: string;
+      items: Line[];
+      total: number;
+      balance: number;
+      contact: { phone?: string };
+    };
+    const server = () => app.getHttpServer();
+    const stock = async (sku: string) =>
+      (
+        await request(server())
+          .get(`/api/inventory/${sku}`)
+          .set(authed())
+          .expect(200)
+      ).body.stockQuantity as number;
+    const bill = async (id: string) =>
+      (
+        await request(server())
+          .get(`/api/appointments/${id}/billing`)
+          .set(authed())
+          .expect(200)
+      ).body as Bill;
+    const checkedIn = async () => {
+      const res = await request(server())
+        .post('/api/appointments')
+        .set(authed())
+        .send({
+          patientId: 'PT-1081',
+          type: 'Consultation',
+          doctor: 'Dr. Bhushan Patil',
+          startsAt: new Date().toISOString(),
+        })
+        .expect(201);
+      const id = res.body.id as string;
+      await request(server())
+        .post(`/api/appointments/${id}/check-in`)
+        .set(authed())
+        .expect(200);
+      return id;
+    };
+    const complete = (id: string, medicines?: object[]) =>
+      request(server())
+        .post(`/api/appointments/${id}/complete`)
+        .set(authed())
+        .send(medicines ? { medicines } : {});
+
+    const FINASTERIDE = '8901234560028'; // ₹95, 8 in stock
+    const MINOXIDIL = '8901234560011'; // ₹650
+    const EXPIRED_CREAM = '8901234560097'; // expired 2026-09-20
+
+    it('refuses the whole completion when a medicine is short or expired', async () => {
+      const id = await checkedIn();
+      const before = await stock(MINOXIDIL);
+      await complete(id, [
+        { itemId: MINOXIDIL, quantity: 1 },
+        { itemId: FINASTERIDE, quantity: 999 },
+      ]).expect(400);
+      await complete(id, [{ itemId: EXPIRED_CREAM, quantity: 1 }]).expect(400);
+      await complete(id, [{ itemId: 'NO-SUCH-SKU', quantity: 1 }]).expect(404);
+      expect(await stock(MINOXIDIL)).toBe(before);
+      await complete(id).expect(200); // still checked in, so it can complete
+    });
+
+    it('takes medicines out of stock and bills them with the visit', async () => {
+      const id = await checkedIn();
+      const fin = await stock(FINASTERIDE);
+      const mnx = await stock(MINOXIDIL);
+      const done = await complete(id, [
+        { itemId: FINASTERIDE, quantity: 1 },
+        { itemId: MINOXIDIL, quantity: 1 },
+        { itemId: FINASTERIDE, quantity: 1 },
+      ]).expect(200);
+      expect(done.body.medicines).toEqual([
+        expect.objectContaining({
+          itemId: FINASTERIDE,
+          quantity: 2,
+          unitPrice: 95,
+        }),
+        expect.objectContaining({
+          itemId: MINOXIDIL,
+          quantity: 1,
+          unitPrice: 650,
+        }),
+      ]);
+      expect(await stock(FINASTERIDE)).toBe(fin - 2);
+      expect(await stock(MINOXIDIL)).toBe(mnx - 1);
+
+      const b = await bill(id);
+      expect(b.items.map((l) => [l.kind, l.amount])).toEqual([
+        ['service', 800],
+        ['medicine', 190],
+        ['medicine', 650],
+      ]);
+      expect(b.total).toBe(1640);
+      expect(b.contact.phone).toBe('+91 99701 52470');
+
+      // Undoing completion puts the medicines back and drops the unpaid bill.
+      const reopened = await request(server())
+        .delete(`/api/appointments/${id}/complete`)
+        .set(authed())
+        .expect(200);
+      expect(reopened.body.medicines).toBeNull();
+      expect(await stock(FINASTERIDE)).toBe(fin);
+      expect(await stock(MINOXIDIL)).toBe(mnx);
+      expect((await bill(id)).items).toHaveLength(1);
+    });
+
+    it('renders the invoice as a PDF once paid, and keeps paid medicines', async () => {
+      const id = await checkedIn();
+      await complete(id, [{ itemId: FINASTERIDE, quantity: 1 }]).expect(200);
+      const b = await bill(id);
+      await request(server())
+        .post(`/api/appointments/${id}/payments`)
+        .set(authed())
+        .send({ amount: b.balance, method: 'UPI', reference: 'UPI-4471' })
+        .expect(201);
+
+      const pdf = await request(server())
+        .get(`/api/invoices/${b.invoiceId}/pdf`)
+        .set(authed())
+        .buffer(true)
+        .parse((res, cb) => {
+          const chunks: Buffer[] = [];
+          res.on('data', (c: Buffer) => chunks.push(c));
+          res.on('end', () => cb(null, Buffer.concat(chunks)));
+        })
+        .expect(200);
+      expect(pdf.headers['content-type']).toBe('application/pdf');
+      const body = pdf.body as Buffer;
+      expect(body.subarray(0, 5).toString()).toBe('%PDF-');
+      if (process.env.INVOICE_PDF_OUT)
+        (await import('node:fs')).writeFileSync(
+          process.env.INVOICE_PDF_OUT,
+          body,
+        );
+      await request(server())
+        .get('/api/invoices/INV-0/pdf')
+        .set(authed())
+        .expect(404);
+
+      await request(server())
+        .delete(`/api/appointments/${id}/complete`)
+        .set(authed())
+        .expect(400);
     });
   });
 });

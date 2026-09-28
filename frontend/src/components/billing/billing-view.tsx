@@ -16,6 +16,7 @@ import {
   type DueItem,
 } from "@/components/appointments/appointments-api";
 import { BillingSection } from "@/components/appointments/billing-section";
+import { InvoiceMenu, type InvoiceMessage } from "@/components/appointments/invoice-actions";
 import { clinicToday, formatDay } from "@/components/patients/patients-api";
 import { inr } from "@/components/settings/catalog-settings";
 import { Button } from "@/components/ui/button";
@@ -99,6 +100,7 @@ export function BillingView({
     null,
   );
   const [paidMessage, setPaidMessage] = useState<string | null>(null);
+  const [invoiceMessage, setInvoiceMessage] = useState<InvoiceMessage | null>(null);
 
   const q = query.trim().toLowerCase();
   const matches = (x: { patientName: string; description: string; invoiceId: string }) =>
@@ -188,6 +190,11 @@ export function BillingView({
             </label>
           </div>
 
+          {invoiceMessage && (
+            <Banner tone={invoiceMessage.tone} onClose={() => setInvoiceMessage(null)}>
+              {invoiceMessage.text}
+            </Banner>
+          )}
           <section className="panel billing-panel">
             <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
               <TabsList className="billing-tabs">
@@ -222,6 +229,9 @@ export function BillingView({
                           <th>Method</th>
                           <th>Received by</th>
                           <th className="num">Amount</th>
+                          <th>
+                            <span className="sr-only">Invoice</span>
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -243,6 +253,9 @@ export function BillingView({
                             <td>{p.receivedBy.name}</td>
                             <td className="num">
                               <strong className="amount-in">{inr.format(p.amount)}</strong>
+                            </td>
+                            <td className="num">
+                              <InvoiceMenu invoiceId={p.invoiceId} onMessage={setInvoiceMessage} />
                             </td>
                           </tr>
                         ))}
@@ -271,6 +284,7 @@ export function BillingView({
                       return <StatusChip tone={d.tone}>{d.text}</StatusChip>;
                     }}
                     onCollect={collect}
+                    onInvoiceMessage={setInvoiceMessage}
                   />
                 )}
               </TabsContent>
@@ -291,6 +305,7 @@ export function BillingView({
                     patient={patient}
                     status={() => <StatusChip tone="neutral">Scheduled</StatusChip>}
                     onCollect={collect}
+                    onInvoiceMessage={setInvoiceMessage}
                     collectLabel="Receive early"
                   />
                 )}
@@ -337,6 +352,7 @@ function DueTable({
   patient,
   status,
   onCollect,
+  onInvoiceMessage,
   collectLabel = "Receive payment",
 }: {
   items: DueItem[];
@@ -344,6 +360,7 @@ function DueTable({
   patient: (name: string, id?: string) => ReactNode;
   status: (item: DueItem) => ReactNode;
   onCollect: (item: DueItem) => void;
+  onInvoiceMessage: (message: InvoiceMessage | null) => void;
   collectLabel?: string;
 }) {
   return (
@@ -381,14 +398,17 @@ function DueTable({
                 <strong>{inr.format(i.amount)}</strong>
               </td>
               <td className="num">
-                <Button
-                  size="sm"
-                  variant={i.overdueDays > 0 ? "default" : "outline"}
-                  onClick={() => onCollect(i)}
-                >
-                  <IndianRupee />
-                  {collectLabel}
-                </Button>
+                <div className="row-actions">
+                  <InvoiceMenu invoiceId={i.invoiceId} onMessage={onInvoiceMessage} />
+                  <Button
+                    size="sm"
+                    variant={i.overdueDays > 0 ? "default" : "outline"}
+                    onClick={() => onCollect(i)}
+                  >
+                    <IndianRupee />
+                    {collectLabel}
+                  </Button>
+                </div>
               </td>
             </tr>
           ))}

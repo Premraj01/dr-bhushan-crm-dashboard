@@ -596,3 +596,72 @@ button.agenda-row:disabled{cursor:default}
 .product-card-name{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
 .product-card-name strong{min-width:0}
 .product-card-name .status-chip{flex:none}
+
+/* Complete visit: medicines */
+.complete-visit{display:grid;gap:10px}
+.complete-visit-search{max-width:none}
+.medicine-results{display:grid;gap:2px;margin:0;padding:4px;list-style:none;border:1px solid var(--border);border-radius:6px;background:var(--card);box-shadow:var(--shadow-panel)}
+.medicine-results button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:12px;border:0;border-radius:4px;background:transparent;padding:8px 10px;color:var(--foreground);text-align:left}
+.medicine-results button:hover:not(:disabled),.medicine-results button:focus-visible{background:var(--teal-soft)}
+.medicine-results button:disabled{cursor:not-allowed;opacity:.55}
+.medicine-results strong,.medicine-results small{display:block}
+.medicine-results strong{font-size:12px}
+.medicine-results small{margin-top:2px;color:var(--muted-foreground);font-size:10px}
+.medicine-result-meta{flex:none;text-align:right}
+.medicine-empty{padding:10px;color:var(--muted-foreground);font-size:11px}
+.medicine-none{display:flex;align-items:center;gap:10px;border:1px dashed var(--border);border-radius:6px;padding:14px;color:var(--muted-foreground);font-size:11px}
+.medicine-none svg{width:18px;flex:none}
+.medicine-none p{margin:0}
+.medicine-rows{display:grid;margin:0;padding:0;list-style:none;border:1px solid var(--border);border-radius:6px}
+.medicine-rows li{display:grid;grid-template-columns:minmax(0,1fr) auto 76px auto;align-items:center;gap:10px;border-bottom:1px solid var(--border);padding:8px 8px 8px 12px}
+.medicine-rows li:last-child{border-bottom:0}
+.medicine-rows strong,.medicine-rows small{display:block}
+.medicine-rows strong{font-size:12px}
+.medicine-rows small{margin-top:2px;color:var(--muted-foreground);font-size:10px}
+.medicine-rows b{font-size:12px;text-align:right}
+.medicine-rows .medicine-total{grid-template-columns:1fr auto;background:var(--secondary);padding:10px 12px;font-size:11px;font-weight:600}
+.medicine-rows .medicine-total b{font-size:13px;color:var(--primary)}
+.qty-stepper{display:flex;align-items:center;gap:4px}
+.qty-stepper button{width:28px;height:28px}
+.qty-stepper input{width:44px;height:28px;border:1px solid var(--input);border-radius:4px;background:var(--background);color:var(--foreground);text-align:center;font-size:12px}
+.medicines-given{display:grid;gap:6px;border-top:1px solid var(--border);padding-top:10px}
+.medicines-given strong{font:700 10px var(--font-heading);color:var(--muted-foreground);text-transform:uppercase}
+.medicines-given ul{display:grid;gap:4px;margin:0;padding:0;list-style:none}
+.medicines-given li{display:flex;justify-content:space-between;gap:10px;font-size:11px}
+.medicines-given small{color:var(--muted-foreground)}
+
+/* Bill lines and invoice actions */
+.bill-lines{display:grid;margin:0 0 14px;padding:0;list-style:none;border:1px solid var(--border);border-radius:6px}
+.bill-lines li{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--border);padding:9px 12px}
+.bill-lines li:last-child{border-bottom:0}
+.bill-lines strong,.bill-lines small{display:block}
+.bill-lines strong{font-size:12px}
+.bill-lines small{margin-top:2px;color:var(--muted-foreground);font-size:10px}
+.bill-lines b{flex:none;font-size:12px}
+.invoice-actions{display:grid;gap:10px;margin-top:16px;border:1px solid color-mix(in oklab,var(--primary) 22%,var(--border));border-radius:8px;background:var(--teal-soft);padding:12px 14px}
+.invoice-actions-head{display:flex;align-items:center;gap:10px}
+.invoice-actions-icon{display:grid;width:34px;height:34px;flex:none;place-items:center;border-radius:6px;background:var(--primary);color:var(--primary-foreground)}
+.invoice-actions-icon svg{width:16px}
+.invoice-actions-head strong,.invoice-actions-head small{display:block}
+.invoice-actions-head strong{font-size:12px}
+.invoice-actions-head small{margin-top:2px;color:var(--muted-foreground);font-size:10px}
+.invoice-actions-buttons{display:flex;flex-wrap:wrap;gap:6px}
+.invoice-actions-buttons button{background:var(--card)}
+.invoice-actions-buttons button:last-child{background:transparent}
+.invoice-actions-hint{margin:0;color:var(--muted-foreground);font-size:10.5px}
+@media(max-width:760px){.medicine-rows li{grid-template-columns:minmax(0,1fr) auto;row-gap:6px}.medicine-rows li>b{text-align:left}.invoice-actions-buttons{display:grid;grid-template-columns:1fr 1fr}}
+.billing-panel .row-actions{display:inline-flex;align-items:center;justify-content:flex-end;gap:4px}
+
+/* Collapsible billing sections (bill details, EMI schedule) */
+.collapse-section.bill-details{margin-bottom:14px;border:1px solid var(--border);border-radius:6px;background:var(--card)}
+.collapse-head{display:flex;width:100%;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;border:0;background:transparent;padding:0;color:var(--foreground);text-align:left}
+.bill-details>.collapse-head{padding:12px}
+.collapse-head .billing-heading{display:inline-flex;align-items:center;gap:6px;margin:0}
+.collapse-head b{font-size:12px}
+.collapse-chevron{width:14px;height:14px;color:var(--muted-foreground);transition:transform .15s}
+.collapse-head[data-state=open] .collapse-chevron{transform:rotate(90deg)}
+.collapse-count{color:var(--muted-foreground);font:500 10px var(--font-body)}
+.collapse-head:focus-visible{outline:2px solid var(--ring);outline-offset:4px;border-radius:4px}
+.bill-details .collapse-body .bill-lines{margin:0;border-width:1px 0 0;border-radius:0}
+.emi-schedule .collapse-body{display:flex;flex-direction:column;gap:10px}
+.emi-next.emi-done{color:var(--success)}

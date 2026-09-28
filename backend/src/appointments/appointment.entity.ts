@@ -23,6 +23,17 @@ export const APPOINTMENT_STATUSES = [
 ] as const;
 export type AppointmentStatus = (typeof APPOINTMENT_STATUSES)[number];
 
+/** A product from inventory given to the patient when the visit was completed. */
+export interface DispensedMedicine {
+  /** Inventory SKU. */
+  itemId: string;
+  name: string;
+  batchNo: string;
+  quantity: number;
+  /** Selling price per unit when it was given (INR, up to 2 decimals). */
+  unitPrice: number;
+}
+
 export interface Appointment extends Entity {
   /** Absent for walk-ins and first consultations that have no patient record yet. */
   patientId?: string;
@@ -45,6 +56,8 @@ export interface Appointment extends Entity {
   rescheduledAt?: string;
   checkedInAt?: string | null;
   completedAt?: string | null;
+  /** Medicines recommended and given at completion; taken out of inventory and billed. */
+  medicines?: DispensedMedicine[] | null;
   /**
    * Status of this visit's own bill (null/absent: not billed). Completing a chargeable
    * visit opens its bill as Pending, so a completed visit that isn't paid shows as pending.

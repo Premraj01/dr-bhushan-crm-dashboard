@@ -1,5 +1,13 @@
 import { useState, type FormEvent } from "react";
-import { ArrowLeft, CheckCircle2, IndianRupee, LoaderCircle, RefreshCw } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  ChevronRight,
+  IndianRupee,
+  LoaderCircle,
+  RefreshCw,
+} from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Banner, StatusChip, type Tone } from "@/components/crm-ui";
 import { inr } from "@/components/settings/catalog-settings";
 import { Button } from "@/components/ui/button";
@@ -17,6 +25,8 @@ import {
   type PaymentMethod,
 } from "./appointments-api";
 import { EmiPlanner, EmiSchedule } from "./emi-plan";
+import { InvoiceActions } from "./invoice-actions";
+import { inrPrice } from "@/components/inventory/inventory-api";
 
 const STATUS_TONE: Record<AppointmentBill["status"], Tone> = {
   Paid: "success",
@@ -107,7 +117,13 @@ export function BillingSection({
         <dl className="billing-figures">
           <div>
             <dt>Total</dt>
-            <dd>{bill.needsCharge ? "To be entered" : inr.format(bill.total)}</dd>
+            <dd>
+              {!bill.needsCharge
+                ? inr.format(bill.total)
+                : bill.total > 0
+                  ? `${inr.format(bill.total)} + visit`
+                  : "To be entered"}
+            </dd>
           </div>
           <div>
             <dt>Received</dt>
@@ -119,6 +135,40 @@ export function BillingSection({
           </div>
         </dl>
       </section>
+
+      {bill.items.some((l) => l.kind === "medicine") && (
+        <Collapsible asChild>
+          <section className="bill-details collapse-section" aria-label="Bill details">
+            <CollapsibleTrigger className="collapse-head">
+              <span className="billing-heading">
+                <ChevronRight className="collapse-chevron" aria-hidden />
+                Bill details
+                <small className="collapse-count">
+                  {bill.items.length} item{bill.items.length === 1 ? "" : "s"}
+                </small>
+              </span>
+              <b>{inr.format(bill.total)}</b>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="collapse-body">
+              <ul className="bill-lines">
+                {bill.items.map((line, i) => (
+                  <li key={`${line.kind}-${line.itemId ?? i}`}>
+                    <div className="min-w-0">
+                      <strong>{line.description}</strong>
+                      <small>
+                        {line.kind === "medicine"
+                          ? `Medicine · ${line.quantity} × ${inrPrice.format(line.unitPrice)}`
+                          : "Treatment"}
+                      </small>
+                    </div>
+                    <b>{inrPrice.format(line.amount)}</b>
+                  </li>
+                ))}
+              </ul>
+            </CollapsibleContent>
+          </section>
+        </Collapsible>
+      )}
 
       {(() => {
         const open = !bill.complimentary && (bill.balance > 0 || bill.needsCharge);
@@ -226,6 +276,8 @@ export function BillingSection({
           Fully paid — nothing due.
         </div>
       )}
+
+      {bill.invoiceId && <InvoiceActions bill={bill} />}
     </div>
   );
 }
@@ -249,7 +301,8 @@ function AddPayment({
   const [reference, setReference] = useState("");
   const [note, setNote] = useState("");
 
-  const due = bill.needsCharge ? Number(charge) || 0 : bill.balance;
+  // A bill opened for medicines only: the visit charge is added to what's already due.
+  const due = bill.needsCharge ? bill.balance + (Number(charge) || 0) : bill.balance;
   const value = Number(amount);
   const tooMuch = due > 0 && value > due;
   const valid =
@@ -305,8 +358,10 @@ function AddPayment({
               min={1}
               value={charge}
               onChange={(e) => {
+                const previousDue = bill.balance + (Number(charge) || 0);
                 setCharge(e.target.value);
-                if (!amount || amount === charge) setAmount(e.target.value);
+                if (!amount || Number(amount) === previousDue)
+                  setAmount(String(bill.balance + (Number(e.target.value) || 0)));
               }}
               placeholder="This visit isn’t priced in Settings — enter the charge"
             />

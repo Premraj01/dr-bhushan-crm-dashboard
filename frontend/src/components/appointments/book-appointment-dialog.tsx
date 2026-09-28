@@ -63,6 +63,8 @@ import {
   type Appointment,
 } from "./appointments-api";
 import { BillingSection } from "./billing-section";
+import { CompleteVisitDialog } from "./complete-visit-dialog";
+import { inrPrice } from "@/components/inventory/inventory-api";
 
 /** "current" keeps the appointment's patient as-is when editing (including walk-ins with no record). */
 type PatientChoice =
@@ -198,7 +200,12 @@ export function AppointmentDialog({
             onReceivePayment={() => setView("billing")}
             onCompleted={(a) => {
               // Visit done → straight to payment.
-              setPaidMessage("Visit marked completed. Receive the payment below.");
+              const given = a.medicines?.length ?? 0;
+              setPaidMessage(
+                given
+                  ? `Visit marked completed and ${given} medicine${given > 1 ? "s" : ""} taken out of inventory. Receive the payment below.`
+                  : "Visit marked completed. Receive the payment below.",
+              );
               setView("billing");
               onPaymentReceived?.(`${a.patientName}’s ${a.type} marked completed.`);
             }}
@@ -275,7 +282,8 @@ function AppointmentForm({
   });
   const [notes, setNotes] = useState(appointment?.notes ?? "");
   const [touched, setTouched] = useState(false);
-  const { complete, reopen } = useAppointmentStatus();
+  const { reopen } = useAppointmentStatus();
+  const [completing, setCompleting] = useState(false);
   // Once the patient is checked in (or done) the slot is history — no rescheduling.
   // Missed visits stay open: reschedule them, or check the patient in.
   const locked = !!appointment && !isOpen(appointment);
@@ -509,15 +517,8 @@ function AppointmentForm({
                     : "Tick the patient in from the day list when they arrive."}
             </small>
             {appointment.status === "Checked in" && onCompleted && (
-              <Button
-                type="button"
-                size="sm"
-                disabled={complete.isPending}
-                onClick={() =>
-                  complete.mutate(appointment.id, { onSuccess: () => onCompleted(appointment) })
-                }
-              >
-                {complete.isPending ? <LoaderCircle className="animate-spin" /> : <Check />}
+              <Button type="button" size="sm" onClick={() => setCompleting(true)}>
+                <Check />
                 Mark completed
               </Button>
             )}
@@ -534,12 +535,38 @@ function AppointmentForm({
               </Button>
             )}
           </div>
-          {(complete.error ?? reopen.error) && (
+          {reopen.error && (
             <Banner tone="error">
-              {(complete.error ?? reopen.error) instanceof ApiError
-                ? (complete.error ?? reopen.error)?.message
+              {reopen.error instanceof ApiError
+                ? reopen.error.message
                 : "Couldn’t update the status."}
             </Banner>
+          )}
+          {appointment.medicines && appointment.medicines.length > 0 && (
+            <div className="medicines-given">
+              <strong>Medicines given</strong>
+              <ul>
+                {appointment.medicines.map((m) => (
+                  <li key={m.itemId}>
+                    <span>
+                      {m.name} <small>× {m.quantity}</small>
+                    </span>
+                    <b>{inrPrice.format(m.unitPrice * m.quantity)}</b>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {onCompleted && (
+            <CompleteVisitDialog
+              appointment={appointment}
+              open={completing}
+              onOpenChange={setCompleting}
+              onCompleted={(done) => {
+                setCompleting(false);
+                onCompleted(done);
+              }}
+            />
           )}
         </div>
       )}

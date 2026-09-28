@@ -40,7 +40,21 @@ export type Appointment = {
   completedAt?: string | null;
   /** Status of the visit's own bill (null/absent: not billed). Completing a chargeable visit opens it as Pending. */
   billStatus?: "Paid" | "Partially paid" | "Pending" | "Overdue" | "Cancelled" | null;
+  /** Medicines given when the visit was completed (taken out of inventory and billed). */
+  medicines?: DispensedMedicine[] | null;
 };
+
+export type DispensedMedicine = {
+  itemId: string;
+  name: string;
+  batchNo: string;
+  quantity: number;
+  /** Selling price per unit when given. */
+  unitPrice: number;
+};
+
+/** A medicine to give when completing a visit. */
+export type MedicineRequest = { itemId: string; quantity: number };
 
 type TeamMember = {
   id: string;
@@ -101,6 +115,7 @@ export function useAppointmentStatus() {
     void queryClient.invalidateQueries({ queryKey: ["patients"] }); // last visit
     void queryClient.invalidateQueries({ queryKey: ["packages"] }); // progress, auto-complete
     void queryClient.invalidateQueries({ queryKey: ["billing"] }); // completing opens the visit's bill
+    void queryClient.invalidateQueries({ queryKey: ["inventory"] }); // medicines given / returned
   };
   const checkIn = useMutation({
     mutationFn: ({ id, undo }: { id: string; undo?: boolean }) =>
@@ -108,8 +123,11 @@ export function useAppointmentStatus() {
     onSuccess: refresh,
   });
   const complete = useMutation({
-    mutationFn: (id: string) =>
-      api<Appointment>(`/appointments/${id}/complete`, { method: "POST" }),
+    mutationFn: ({ id, medicines = [] }: { id: string; medicines?: MedicineRequest[] }) =>
+      api<Appointment>(`/appointments/${id}/complete`, {
+        method: "POST",
+        body: JSON.stringify(medicines.length ? { medicines } : {}),
+      }),
     onSuccess: refresh,
   });
   // Undo "Mark completed": back to Checked in (reopens a package it had completed).
@@ -245,7 +263,12 @@ export type Payment = {
 /** What's owed for an appointment (the whole package for package sessions). */
 export type AppointmentBill = {
   appointmentId?: string;
+  patientId?: string;
   patientName: string;
+  /** For sending the invoice by WhatsApp or email. */
+  contact: { phone?: string; email?: string };
+  /** The treatment and any medicines given at the visit. */
+  items: InvoiceLine[];
   /** YYYY-MM-DD the invoice was issued. */
   issuedAt?: string;
   source: "package" | "visit";
@@ -256,7 +279,10 @@ export type AppointmentBill = {
   paid: number;
   balance: number;
   status: "Paid" | "Partially paid" | "Pending" | "Overdue" | "Cancelled" | "Not billed";
-  /** The visit's price isn't in Settings — enter it with the first payment. */
+  /**
+   * The visit's price isn't in Settings — enter it with the first payment. The bill may
+   * already hold medicines (`total`), and the charge is added to them.
+   */
   needsCharge: boolean;
   /** A package's complimentary session: nothing to pay. */
   complimentary: boolean;
@@ -264,6 +290,17 @@ export type AppointmentBill = {
   /** "emi" when the balance is being paid in installments. */
   plan: "full" | "emi";
   installments: Installment[];
+};
+
+export type InvoiceLine = {
+  kind: "service" | "medicine";
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  /** quantity × unitPrice, to the paisa (the bill total is rounded to rupees). */
+  amount: number;
+  itemId?: string;
+  batchNo?: string;
 };
 
 export type Installment = {
@@ -316,11 +353,12 @@ export type ReceivePaymentRequest = {
   charge?: number;
 };
 
-export function useBill(billPath: BillPath) {
+export function useBill(billPath: BillPath, enabled = true) {
   return useQuery({
     queryKey: ["billing", billPath],
     queryFn: () => api<AppointmentBill>(`${billPath}/billing`),
     retry: 1,
+    enabled,
   });
 }
 

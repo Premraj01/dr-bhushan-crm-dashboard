@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { CalendarClock, LoaderCircle, Trash2 } from "lucide-react";
+import { CalendarClock, ChevronRight, LoaderCircle, Trash2 } from "lucide-react";
 import { Banner, StatusChip, type Tone } from "@/components/crm-ui";
 import { addDays, addMonths, clinicToday } from "@/components/patients/patients-api";
 import { inr } from "@/components/settings/catalog-settings";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ApiError } from "@/lib/api";
 import {
   useEmiPlan,
@@ -57,7 +58,7 @@ export function EmiPlanner({
 }) {
   const { save } = useEmiPlan(billPath);
   const [charge, setCharge] = useState("");
-  const balance = bill.needsCharge ? Number(charge) || 0 : bill.balance;
+  const balance = bill.needsCharge ? bill.balance + (Number(charge) || 0) : bill.balance;
   const [count, setCount] = useState(3);
   const [first, setFirst] = useState(() => addMonths(clinicToday(), 1));
   const [every, setEvery] = useState(1);
@@ -236,57 +237,70 @@ export function EmiSchedule({
   const next = bill.installments.find((i) => i.status !== "Paid");
 
   return (
-    <section className="emi-schedule" aria-label="EMI schedule">
-      <div className="emi-schedule-head">
-        <h4 className="billing-heading">EMI schedule</h4>
-        {next && (
-          <span className="emi-next">
-            Next: {inr.format(next.amount - next.paid)}{" "}
-            {next.status === "Overdue" ? "overdue since" : "due"} {shortDate(next.dueDate)}
+    <Collapsible asChild>
+      <section className="emi-schedule collapse-section" aria-label="EMI schedule">
+        <CollapsibleTrigger className="collapse-head emi-schedule-head">
+          <span className="billing-heading">
+            <ChevronRight className="collapse-chevron" aria-hidden />
+            EMI schedule
+            <small className="collapse-count">
+              {bill.installments.length} installment{bill.installments.length === 1 ? "" : "s"}
+            </small>
           </span>
-        )}
-      </div>
-      <ol className="emi-list">
-        {bill.installments.map((i) => (
-          <li key={i.number} className={`emi-${i.status.replace(" ", "-").toLowerCase()}`}>
-            <span className="step-no">{i.number}</span>
-            <div className="min-w-0">
-              <strong>{shortDate(i.dueDate)}</strong>
-              <small>
-                {i.paid > 0 && i.paid < i.amount
-                  ? `${inr.format(i.paid)} received · ${inr.format(i.amount - i.paid)} left`
-                  : i.paid >= i.amount
-                    ? "Received"
-                    : "Not received yet"}
-              </small>
+          {next ? (
+            <span className="emi-next">
+              Next: {inr.format(next.amount - next.paid)}{" "}
+              {next.status === "Overdue" ? "overdue since" : "due"} {shortDate(next.dueDate)}
+            </span>
+          ) : (
+            <span className="emi-next emi-done">All received</span>
+          )}
+        </CollapsibleTrigger>
+        <CollapsibleContent className="collapse-body">
+          <ol className="emi-list">
+            {bill.installments.map((i) => (
+              <li key={i.number} className={`emi-${i.status.replace(" ", "-").toLowerCase()}`}>
+                <span className="step-no">{i.number}</span>
+                <div className="min-w-0">
+                  <strong>{shortDate(i.dueDate)}</strong>
+                  <small>
+                    {i.paid > 0 && i.paid < i.amount
+                      ? `${inr.format(i.paid)} received · ${inr.format(i.amount - i.paid)} left`
+                      : i.paid >= i.amount
+                        ? "Received"
+                        : "Not received yet"}
+                  </small>
+                </div>
+                <b>{inr.format(i.amount)}</b>
+                <StatusChip tone={INSTALLMENT_TONE[i.status]}>{i.status}</StatusChip>
+              </li>
+            ))}
+          </ol>
+          {clear.isError && <Banner tone="error">{errorText(clear.error)}</Banner>}
+          {bill.balance > 0 && (
+            <div className="emi-actions">
+              <button type="button" className="link-reset" onClick={onChange}>
+                <CalendarClock />
+                Change plan
+              </button>
+              <button
+                type="button"
+                className="link-reset danger"
+                disabled={clear.isPending}
+                onClick={() =>
+                  clear.mutate(undefined, {
+                    onSuccess: () =>
+                      onRemoved("EMI plan removed. Payments already received are kept."),
+                  })
+                }
+              >
+                <Trash2 />
+                Remove EMI plan
+              </button>
             </div>
-            <b>{inr.format(i.amount)}</b>
-            <StatusChip tone={INSTALLMENT_TONE[i.status]}>{i.status}</StatusChip>
-          </li>
-        ))}
-      </ol>
-      {clear.isError && <Banner tone="error">{errorText(clear.error)}</Banner>}
-      {bill.balance > 0 && (
-        <div className="emi-actions">
-          <button type="button" className="link-reset" onClick={onChange}>
-            <CalendarClock />
-            Change plan
-          </button>
-          <button
-            type="button"
-            className="link-reset danger"
-            disabled={clear.isPending}
-            onClick={() =>
-              clear.mutate(undefined, {
-                onSuccess: () => onRemoved("EMI plan removed. Payments already received are kept."),
-              })
-            }
-          >
-            <Trash2 />
-            Remove EMI plan
-          </button>
-        </div>
-      )}
-    </section>
+          )}
+        </CollapsibleContent>
+      </section>
+    </Collapsible>
   );
 }

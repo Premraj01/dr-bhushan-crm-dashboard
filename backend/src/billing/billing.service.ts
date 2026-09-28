@@ -13,11 +13,12 @@ import { AppointmentsService } from '../appointments/appointments.service';
 import { AuthUser } from '../auth/auth-user';
 import { TreatmentCatalogService } from '../catalog/catalog.service';
 import { addDays, clinicDate } from '../common/dates';
-import { Invoice } from '../invoices/invoice.entity';
+import { Invoice, InvoiceLine, invoiceTotal } from '../invoices/invoice.entity';
 import { InvoicesService } from '../invoices/invoices.service';
 import { Payment } from '../invoices/payment.entity';
 import { PaymentsService } from '../invoices/payments.service';
 import { PackagesService } from '../packages/packages.service';
+import { PatientsService } from '../patients/patients.service';
 import { EmiPlanDto } from './dto/emi-plan.dto';
 import { ReceivePaymentDto } from './dto/receive-payment.dto';
 
@@ -35,8 +36,13 @@ export interface AppointmentBill {
   source: 'package' | 'visit';
   packageId?: string;
   invoiceId?: string;
+  patientId?: string;
   patientName: string;
+  /** For sending the invoice by WhatsApp or email. */
+  contact: { phone?: string; email?: string };
   description: string;
+  /** What's billed: the treatment and any medicines given at the visit. */
+  items: InvoiceLine[];
   /** YYYY-MM-DD the invoice was issued. */
   issuedAt?: string;
   /** INR. For a visit without a bill yet, the price from Settings (0 if unknown). */
@@ -104,6 +110,7 @@ export class BillingService {
     private readonly invoices: InvoicesService,
     private readonly payments: PaymentsService,
     private readonly catalog: TreatmentCatalogService,
+    private readonly patients: PatientsService,
   ) {}
 
   /* ---------- from the calendar (appointment) ---------- */
@@ -111,23 +118,27 @@ export class BillingService {
   bill(appointmentId: string): AppointmentBill {
     const appointment = this.appointments.findOne(appointmentId);
     const invoice = this.existingInvoice(appointment);
-    if (invoice) return this.view(invoice, appointment.id);
+    if (invoice) return this.view(invoice, appointment);
 
     // Not billed yet: show what this visit will cost.
     const session = this.packageSession(appointment);
-    const total = session ? session.charge : this.visitPrice(appointment);
+    const items = this.visitLines(appointment);
+    const total = invoiceTotal(items);
     return {
       appointmentId: appointment.id,
       source: session ? 'package' : 'visit',
       ...(appointment.packageId && { packageId: appointment.packageId }),
+      ...(appointment.patientId && { patientId: appointment.patientId }),
       patientName: appointment.patientName,
+      contact: this.contactOf(appointment.patientId),
       description: session ? session.description : appointment.type,
+      items,
       total,
       paid: 0,
       balance: total,
       status: 'Not billed',
       needsCharge: !session && total === 0,
-      complimentary: !!session?.complimentary,
+      complimentary: !!session?.complimentary && total === 0,
       payments: [],
       plan: 'full',
       installments: [],
@@ -171,12 +182,15 @@ export class BillingService {
    */
   @OnEvent(APPOINTMENT_COMPLETED)
   onAppointmentCompleted(appointment: Appointment) {
-    if (this.existingInvoice(appointment)) return;
-    const session = this.packageSession(appointment);
-    const chargeable = session
-      ? !session.complimentary
-      : this.visitPrice(appointment) > 0;
-    if (chargeable) this.ensureInvoice(appointment);
+    const existing = this.existingInvoice(appointment);
+    if (existing) {
+      // Paid in advance: the medicines given at the visit are added to the same bill.
+      const medicines = medicineLines(appointment);
+      if (medicines.length) this.invoices.addLines(existing.id, medicines);
+      return;
+    }
+    if (invoiceTotal(this.visitLines(appointment)) > 0)
+      this.ensureInvoice(appointment);
   }
 
   /** Undoing completion drops the bill it opened, as long as nothing has been paid on it. */
@@ -192,6 +206,26 @@ export class BillingService {
 
   invoiceBill(invoiceId: string): AppointmentBill {
     return this.view(this.invoices.findOne(invoiceId));
+  }
+
+  /** Everything the printable invoice shows. */
+  invoiceDocument(invoiceId: string) {
+    const invoice = this.invoices.findOne(invoiceId);
+    const appointment = invoice.appointmentId
+      ? this.appointments.findAll().find((a) => a.id === invoice.appointmentId)
+      : undefined;
+    return {
+      invoice,
+      lines: this.invoices.linesOf(invoice),
+      patient: invoice.patientId
+        ? this.patients.findAll().find((p) => p.id === invoice.patientId)
+        : undefined,
+      appointment,
+      payments: this.payments.forInvoice(invoice.id),
+      installments: invoice.emi
+        ? installmentViews(invoice.emi, invoice.paid)
+        : [],
+    };
   }
 
   receiveForInvoice(
@@ -371,36 +405,61 @@ export class BillingService {
   /** The appointment's invoice, opened on first use (package bill, or the visit at its price). */
   private ensureInvoice(appointment: Appointment, charge?: number): Invoice {
     const existing = this.existingInvoice(appointment);
-    if (existing) return existing;
-    const session = this.packageSession(appointment);
-    if (session) {
-      if (session.complimentary) {
-        throw new BadRequestException(
-          'This is a complimentary session — there is nothing to pay',
-        );
-      }
-      return this.invoices.open({
-        ...(appointment.patientId && { patientId: appointment.patientId }),
-        patientName: appointment.patientName,
-        service: session.description,
-        amount: session.charge,
-        ...(appointment.packageId && { packageId: appointment.packageId }),
-        appointmentId: appointment.id,
-      });
+    if (existing) {
+      // Billed for medicines only so far: the visit charge comes with the first payment.
+      const hasService = this.invoices
+        .linesOf(existing)
+        .some((l) => l.kind === 'service');
+      if (charge && !hasService && !existing.packageId)
+        return this.invoices.addLines(existing.id, [
+          serviceLine(appointment.type, charge),
+        ]);
+      return existing;
     }
-    const amount = this.visitPrice(appointment) || charge;
-    if (!amount) {
+    const session = this.packageSession(appointment);
+    const items = this.visitLines(appointment, charge);
+    if (invoiceTotal(items) === 0) {
       throw new BadRequestException(
-        `Enter the charge for "${appointment.type}" with the first payment`,
+        session
+          ? 'This is a complimentary session — there is nothing to pay'
+          : `Enter the charge for "${appointment.type}" with the first payment`,
       );
     }
     return this.invoices.open({
       ...(appointment.patientId && { patientId: appointment.patientId }),
       patientName: appointment.patientName,
-      service: appointment.type,
-      amount,
+      service: session ? session.description : appointment.type,
+      items,
+      ...(session &&
+        appointment.packageId && { packageId: appointment.packageId }),
       appointmentId: appointment.id,
     });
+  }
+
+  /**
+   * A visit's bill: its treatment (package step price, Settings price, or the charge
+   * entered with the first payment) followed by the medicines given at completion.
+   */
+  private visitLines(appointment: Appointment, charge?: number): InvoiceLine[] {
+    const session = this.packageSession(appointment);
+    const price = session
+      ? session.charge
+      : this.visitPrice(appointment) || charge || 0;
+    const service =
+      session || price > 0
+        ? [serviceLine(session ? session.description : appointment.type, price)]
+        : [];
+    return [...service, ...medicineLines(appointment)];
+  }
+
+  private contactOf(patientId: string | undefined): AppointmentBill['contact'] {
+    const patient = patientId
+      ? this.patients.findAll().find((p) => p.id === patientId)
+      : undefined;
+    return {
+      ...(patient?.phone && { phone: patient.phone }),
+      ...(patient?.email && { email: patient.email }),
+    };
   }
 
   /** Every visit — package sessions included — has its own bill. */
@@ -450,23 +509,31 @@ export class BillingService {
 
   private view(
     invoice: Invoice | undefined,
-    appointmentId?: string,
+    appointment?: Appointment,
   ): AppointmentBill {
     if (!invoice) throw new NotFoundException('Bill not found');
     const paid = invoice.paid;
+    const items = this.invoices.linesOf(invoice);
     return {
-      ...(appointmentId && { appointmentId }),
+      ...(appointment && { appointmentId: appointment.id }),
       source: invoice.packageId ? 'package' : 'visit',
       ...(invoice.packageId && { packageId: invoice.packageId }),
       invoiceId: invoice.id,
+      ...(invoice.patientId && { patientId: invoice.patientId }),
       patientName: invoice.patientName,
+      contact: this.contactOf(invoice.patientId),
       description: this.describeInvoice(invoice),
+      items,
       issuedAt: invoice.issuedAt,
       total: invoice.amount,
       paid,
       balance: Math.max(0, invoice.amount - paid),
       status: invoice.status,
-      needsCharge: false,
+      // Opened for medicines only: the visit's own charge is still to be entered.
+      needsCharge:
+        !!appointment &&
+        !invoice.packageId &&
+        !items.some((l) => l.kind === 'service'),
       complimentary: false,
       payments: this.payments.forInvoice(invoice.id),
       plan: invoice.emi ? 'emi' : 'full',
@@ -508,4 +575,27 @@ function installmentViews(
       status,
     };
   });
+}
+
+function serviceLine(description: string, price: number): InvoiceLine {
+  return {
+    kind: 'service',
+    description,
+    quantity: 1,
+    unitPrice: price,
+    amount: price,
+  };
+}
+
+function medicineLines(appointment: Appointment): InvoiceLine[] {
+  return (appointment.medicines ?? []).map((m) => ({
+    kind: 'medicine',
+    description: m.name,
+    quantity: m.quantity,
+    unitPrice: m.unitPrice,
+    // To the paisa; the invoice total is rounded to whole rupees.
+    amount: Math.round(m.quantity * m.unitPrice * 100) / 100,
+    itemId: m.itemId,
+    batchNo: m.batchNo,
+  }));
 }
