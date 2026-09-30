@@ -10,6 +10,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { CheckInDto } from './dto/check-in.dto';
 import { CompleteAppointmentDto } from './dto/complete-appointment.dto';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { ListAppointmentsQuery } from './dto/list-appointments.query';
@@ -58,8 +59,8 @@ export class AppointmentsController {
   @Post(':id/check-in')
   @RequirePermission('appointments', 'checkIn')
   @HttpCode(200)
-  checkIn(@Param('id') id: string) {
-    return this.appointments.checkIn(id);
+  checkIn(@Param('id') id: string, @Body() dto: CheckInDto) {
+    return this.appointments.checkIn(id, dto.newPatient);
   }
 
   @Delete(':id/check-in')

@@ -162,7 +162,8 @@ export const PHOTO_ANGLES = [
 export type PhotoAngle = (typeof PHOTO_ANGLES)[number];
 
 export const PHOTO_MILESTONES = [
-  "Pre-operative",
+  "Initial assessment",
+  "Surgery day",
   "Day 1 post-op",
   "1 month",
   "3 months",

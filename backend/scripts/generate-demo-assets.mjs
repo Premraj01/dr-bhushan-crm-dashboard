@@ -53,7 +53,7 @@ const smooth = (e0, e1, x) => {
  * frontal hair length (1 = full), and fresh grafts / shaved donor on day 1.
  */
 const NORWOOD_IV = {
-  'Pre-operative': { front: 0.07, mid: 0.6, crown: 0.12, temple: 1 },
+  'Initial assessment': { front: 0.07, mid: 0.6, crown: 0.12, temple: 1 },
   'Day 1 post-op': { front: 0.07, mid: 0.6, crown: 0.12, temple: 1, grafts: true },
   '1 month': { front: 0.16, mid: 0.55, crown: 0.14, temple: 0.65, short: 0.3 },
   '3 months': { front: 0.38, mid: 0.65, crown: 0.22, temple: 0.4, short: 0.55 },
@@ -61,7 +61,7 @@ const NORWOOD_IV = {
   '1 year': { front: 0.92, mid: 0.88, crown: 0.34, temple: 0.04 },
 };
 const LUDWIG_II = {
-  'Pre-operative': { diffuse: 0.68 },
+  'Initial assessment': { diffuse: 0.68 },
   '1 month': { diffuse: 0.62 },
   Other: { diffuse: 0.46 },
 };
@@ -259,7 +259,7 @@ const ALL_ANGLES = Object.keys(VIEW);
 const photoPlan = [
   // Amit Joshi — FUE 2,800 grafts, Sept 2025: the full before-and-after journey.
   ...[
-    ['Pre-operative', '2025-09-01', ALL_ANGLES, 'Baseline set before FUE; dry hair, clinic lighting'],
+    ['Initial assessment', '2025-09-01', ALL_ANGLES, 'Baseline set before FUE; dry hair, clinic lighting'],
     ['Day 1 post-op', '2025-09-09', ['Frontal hairline', 'Top / vertex', 'Back (donor area)'], 'First wash done at clinic'],
     ['1 month', '2025-10-08', ['Frontal hairline', 'Top / vertex'], 'Expected shedding of transplanted hair'],
     ['3 months', '2025-12-08', ['Frontal hairline', 'Top / vertex', 'Crown'], undefined],
@@ -273,7 +273,7 @@ const photoPlan = [
       takenOn,
       ...(note && { note }),
       params: NORWOOD_IV[milestone],
-      uploadedBy: milestone === '1 year' || milestone === 'Pre-operative' ? STAFF.bhushan : STAFF.priya,
+      uploadedBy: milestone === '1 year' || milestone === 'Initial assessment' ? STAFF.bhushan : STAFF.priya,
     })),
   ),
   // Rohan Kulkarni — Norwood IV, surgery being planned.
@@ -281,15 +281,15 @@ const photoPlan = [
     (angle) => ({
       patientId: 'PT-1083',
       angle,
-      milestone: 'Pre-operative',
+      milestone: 'Initial assessment',
       takenOn: '2026-09-18',
-      params: { ...NORWOOD_IV['Pre-operative'], mid: 0.5 },
+      params: { ...NORWOOD_IV['Initial assessment'], mid: 0.5 },
       uploadedBy: STAFF.bhushan,
     }),
   ),
   // Ananya Deshmukh — Ludwig II on PRP.
-  { patientId: 'PT-1084', angle: 'Top / vertex', milestone: 'Pre-operative', takenOn: '2026-07-24', note: 'Baseline before PRP course', params: LUDWIG_II['Pre-operative'], uploadedBy: STAFF.sonal },
-  { patientId: 'PT-1084', angle: 'Frontal hairline', milestone: 'Pre-operative', takenOn: '2026-07-24', note: 'Baseline before PRP course', params: LUDWIG_II['Pre-operative'], uploadedBy: STAFF.sonal },
+  { patientId: 'PT-1084', angle: 'Top / vertex', milestone: 'Initial assessment', takenOn: '2026-07-24', note: 'Baseline before PRP course', params: LUDWIG_II['Initial assessment'], uploadedBy: STAFF.sonal },
+  { patientId: 'PT-1084', angle: 'Frontal hairline', milestone: 'Initial assessment', takenOn: '2026-07-24', note: 'Baseline before PRP course', params: LUDWIG_II['Initial assessment'], uploadedBy: STAFF.sonal },
   { patientId: 'PT-1084', angle: 'Top / vertex', milestone: '1 month', takenOn: '2026-08-24', params: LUDWIG_II['1 month'], uploadedBy: STAFF.sonal },
   { patientId: 'PT-1084', angle: 'Top / vertex', milestone: 'Other', takenOn: '2026-09-26', note: 'After PRP session 3', params: LUDWIG_II.Other, uploadedBy: STAFF.priya },
 ];

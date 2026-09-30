@@ -25,7 +25,10 @@ import {
   DispenseMedicineDto,
   PrescribedItemDto,
 } from './dto/complete-appointment.dto';
-import { CreateAppointmentDto } from './dto/create-appointment.dto';
+import {
+  CreateAppointmentDto,
+  NewPatientDto,
+} from './dto/create-appointment.dto';
 import { ListAppointmentsQuery } from './dto/list-appointments.query';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
 
@@ -244,8 +247,12 @@ export class AppointmentsService
     return updated;
   }
 
-  /** Patient has arrived. Allowed on (or after) the appointment's day. */
-  checkIn(id: string): Appointment {
+  /**
+   * Patient has arrived. Allowed on (or after) the appointment's day. Everyone who
+   * checks in gets a patient record: a walk-in is registered with `newPatient`, or
+   * linked to the patient already on file with that phone number.
+   */
+  checkIn(id: string, newPatient?: NewPatientDto): Appointment {
     const a = this.findOne(id);
     if (!isOpen(a)) {
       throw new BadRequestException(
@@ -257,12 +264,26 @@ export class AppointmentsService
         'A patient can’t be checked in before the day of the appointment',
       );
     }
+    if (!a.patientId && !newPatient) {
+      throw new BadRequestException(
+        `${a.patientName} has no patient record yet — add their mobile number to register them at check-in`,
+      );
+    }
+    const patientId =
+      a.patientId ??
+      (
+        this.patients.findByPhone(newPatient!.phone) ??
+        this.patients.create(newPatient!)
+      ).id;
     const updated = super.update(id, {
       status: 'Checked in',
       checkedInAt: new Date().toISOString(),
+      ...(!a.patientId && {
+        patientId,
+        patientName: this.resolvePatientName(patientId),
+      }),
     });
-    if (a.patientId)
-      this.patients.update(a.patientId, { lastVisit: clinicDate() });
+    this.patients.update(patientId, { lastVisit: clinicDate() });
     return updated;
   }
 

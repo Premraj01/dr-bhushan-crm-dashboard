@@ -134,8 +134,20 @@ export function useAppointmentStatus() {
     void queryClient.invalidateQueries({ queryKey: ["history"] });
   };
   const checkIn = useMutation({
-    mutationFn: ({ id, undo }: { id: string; undo?: boolean }) =>
-      api<Appointment>(`/appointments/${id}/check-in`, { method: undo ? "DELETE" : "POST" }),
+    mutationFn: ({
+      id,
+      undo,
+      newPatient,
+    }: {
+      id: string;
+      undo?: boolean;
+      /** Registers a walk-in (no patient record) at check-in; a number on file links that patient. */
+      newPatient?: { name: string; phone: string };
+    }) =>
+      api<Appointment>(`/appointments/${id}/check-in`, {
+        method: undo ? "DELETE" : "POST",
+        ...(newPatient && { body: JSON.stringify({ newPatient }) }),
+      }),
     onSuccess: refresh,
   });
   const complete = useMutation({

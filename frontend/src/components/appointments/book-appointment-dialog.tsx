@@ -70,6 +70,7 @@ import {
 } from "./appointments-api";
 import { BillingSection } from "./billing-section";
 import { CompleteVisitDialog, type Assessment } from "./complete-visit-dialog";
+import { SurgeryPhotos } from "./surgery-photos";
 import { usePlans } from "@/components/plans/plans-api";
 import { dosing } from "@/components/history/prescription-options";
 import { inrPrice } from "@/components/inventory/inventory-api";
@@ -644,6 +645,9 @@ function AppointmentForm({
             index={appointment.packageStep}
           />
         )}
+      {isSurgery && appointment?.patientId && appointment.status === "Checked in" && (
+        <SurgeryPhotos patientId={appointment.patientId} type={appointment.type} />
+      )}
       {/* Completed visits are read-only: every field is disabled. */}
       <fieldset className="form-lock" disabled={readOnly}>
         <div className="form-grid mt-4">

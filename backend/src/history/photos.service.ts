@@ -19,7 +19,7 @@ export class PhotosService extends CrudService<PatientPhoto> {
     super(events, 'photo', 'PH-', demoPhotos(files));
   }
 
-  /** Timeline order (pre-op first), then the standard angle order. */
+  /** Timeline order (initial assessment first), then the standard angle order. */
   list(patientId: string): PatientPhoto[] {
     this.patients.findOne(patientId);
     const m = (p: PatientPhoto) => PHOTO_MILESTONES.indexOf(p.milestone);

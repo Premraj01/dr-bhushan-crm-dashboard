@@ -1,6 +1,18 @@
 import { useState, type FormEvent } from "react";
-import { Check, ClipboardList, LoaderCircle, Minus, Pill, Plus, Search, X } from "lucide-react";
+import {
+  Check,
+  ClipboardList,
+  LoaderCircle,
+  Minus,
+  Pill,
+  Plus,
+  Search,
+  Upload,
+  X,
+} from "lucide-react";
 import { Banner } from "@/components/crm-ui";
+import { useUploadPhoto } from "@/components/history/history-api";
+import { PhotoPicker, type StagedPhoto } from "@/components/history/photo-vault";
 import { RxFields } from "@/components/history/rx-fields";
 import {
   blankRx,
@@ -119,6 +131,16 @@ function CompleteVisitForm({
   const { complete } = useAppointmentStatus();
   const [rows, setRows] = useState<Row[]>([]);
   const [search, setSearch] = useState("");
+  const uploadPhoto = useUploadPhoto(appointment.patientId ?? "");
+  const [photos, setPhotos] = useState<StagedPhoto[]>([]);
+  /** Index of the assessment photo being uploaded. */
+  const [uploading, setUploading] = useState<number | null>(null);
+  /** Set when the visit was completed but some photos didn't upload. */
+  const [photoFailure, setPhotoFailure] = useState<{
+    message: string;
+    done: Appointment;
+    assessment: Assessment;
+  } | null>(null);
 
   const q = search.trim().toLowerCase();
   const chosenItems = new Set(rows.map((r) => r.item?.id).filter(Boolean));
@@ -140,6 +162,7 @@ function CompleteVisitForm({
   const exact = [...stockMatches.map((p) => p.name), ...otherMatches].some(
     (n) => n.toLowerCase() === q,
   );
+  const busy = complete.isPending || updatePatient.isPending || uploading !== null;
   const given = rows.filter((r) => r.item && r.give > 0);
   const total = given.reduce((sum, r) => sum + r.item!.sellingPrice * r.give, 0);
 
@@ -166,6 +189,44 @@ function CompleteVisitForm({
       give: Math.max(0, Math.min(row.item?.stockQuantity ?? 0, Number.isFinite(give) ? give : 0)),
     });
 
+  /** Uploads the assessment photos in order; keeps the ones left when one fails. */
+  const uploadPhotos = async (list: StagedPhoto[]): Promise<string | null> => {
+    for (const [i, p] of list.entries()) {
+      setUploading(i);
+      try {
+        await uploadPhoto.mutateAsync({
+          file: p.file,
+          angle: p.angle,
+          milestone: "Initial assessment",
+          takenOn: today,
+          note: `${appointment.type} assessment`,
+        });
+      } catch (err) {
+        setPhotos(list.slice(i));
+        setUploading(null);
+        return `${p.file.name}: ${errorText(err)}`;
+      }
+    }
+    setUploading(null);
+    setPhotos([]);
+    return null;
+  };
+
+  /** Photos go to the patient's history; the concern goes on the patient's record. */
+  const finish = async (done: Appointment, assessment: Assessment, list = photos) => {
+    setPhotoFailure(null);
+    const failed = await uploadPhotos(list);
+    if (failed) return setPhotoFailure({ message: failed, done, assessment });
+    // The visit is already completed, so a failure here only loses the concern,
+    // which can be set from the record.
+    if (assessment.concern && assessment.concern !== patient?.concern) {
+      updatePatient.mutate(
+        { concern: assessment.concern },
+        { onSettled: () => onCompleted(done, assessment) },
+      );
+    } else onCompleted(done, assessment);
+  };
+
   const submit = (e: FormEvent) => {
     // This form is portalled out of the appointment form; keep its submit from reaching it.
     e.preventDefault();
@@ -179,15 +240,7 @@ function CompleteVisitForm({
       {
         onSuccess: (done) => {
           if (!assessing) return onCompleted(done);
-          const assessment = { concern: chosenConcern, planId: planId || null };
-          // The concern goes on the patient's record; the visit is already completed,
-          // so a failure here only loses the concern, which can be set from the record.
-          if (chosenConcern && chosenConcern !== patient?.concern) {
-            updatePatient.mutate(
-              { concern: chosenConcern },
-              { onSettled: () => onCompleted(done, assessment) },
-            );
-          } else onCompleted(done, assessment);
+          void finish(done, { concern: chosenConcern, planId: planId || null });
         },
       },
     );
@@ -207,7 +260,7 @@ function CompleteVisitForm({
       </DialogHeader>
 
       {assessing && (
-        <section className="visit-assessment mt-4" aria-label="Assessment">
+        <section className="visit-assessment" aria-label="Assessment">
           <h4 className="form-section-title">Assessment</h4>
           <div className="form-grid">
             <label>
@@ -234,13 +287,24 @@ function CompleteVisitForm({
                   </option>
                 ))}
               </SelectInput>
+              <small className="assessment-hint">
+                {planId
+                  ? "You can create the package from this plan after completing."
+                  : "Optional — can also be created later from the patient’s record."}
+              </small>
             </label>
           </div>
-          <p className="field-note mt-2">
-            {planId
-              ? "After completing, you can create the package from this plan — adjust grafts, prices and dates before saving."
-              : "Optional — the package can also be created later from the patient’s record."}
-          </p>
+          <div className="assessment-photos">
+            <header>
+              <h4 className="form-section-title">Photos</h4>
+              <small>Optional · saved to history under “Initial assessment”</small>
+            </header>
+            <PhotoPicker
+              staged={photos}
+              onChange={setPhotos}
+              disabled={uploading !== null || !!photoFailure}
+            />
+          </div>
         </section>
       )}
 
@@ -425,25 +489,60 @@ function CompleteVisitForm({
         )}
 
         {complete.error && <Banner tone="error">{errorText(complete.error)}</Banner>}
+        {photoFailure && (
+          <Banner tone="error">
+            The visit is completed, but a photo couldn’t be uploaded — {photoFailure.message}
+          </Banner>
+        )}
       </div>
 
-      <DialogFooter className="mt-6">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={complete.isPending}>
-          Cancel
-        </Button>
-        <Button type="submit" disabled={complete.isPending || updatePatient.isPending}>
-          {complete.isPending || updatePatient.isPending ? (
-            <LoaderCircle className="animate-spin" />
-          ) : rows.length ? (
-            <ClipboardList />
-          ) : (
-            <Check />
-          )}
-          {rows.length
-            ? `Complete & prescribe ${rows.length} medicine${rows.length > 1 ? "s" : ""}`
-            : "Complete visit"}
-        </Button>
-      </DialogFooter>
+      {photoFailure ? (
+        <DialogFooter className="mt-6">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={uploading !== null || updatePatient.isPending}
+            onClick={() => void finish(photoFailure.done, photoFailure.assessment, [])}
+          >
+            Continue without them
+          </Button>
+          <Button
+            type="button"
+            disabled={uploading !== null || updatePatient.isPending}
+            onClick={() => void finish(photoFailure.done, photoFailure.assessment)}
+          >
+            {uploading !== null ? <LoaderCircle className="animate-spin" /> : <Upload />}
+            Retry {photos.length} photo{photos.length === 1 ? "" : "s"}
+          </Button>
+        </DialogFooter>
+      ) : (
+        <DialogFooter className="mt-6">
+          <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={busy}>
+            {uploading !== null ? (
+              <>
+                <LoaderCircle className="animate-spin" />
+                Uploading photo {uploading + 1} of {photos.length}…
+              </>
+            ) : (
+              <>
+                {busy ? (
+                  <LoaderCircle className="animate-spin" />
+                ) : rows.length ? (
+                  <ClipboardList />
+                ) : (
+                  <Check />
+                )}
+                {rows.length
+                  ? `Complete & prescribe ${rows.length} medicine${rows.length > 1 ? "s" : ""}`
+                  : "Complete visit"}
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      )}
     </ValidatedForm>
   );
 }

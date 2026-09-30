@@ -742,7 +742,7 @@ button.agenda-row:disabled{cursor:default}
 .photo-drop{position:relative;display:flex;align-items:center;gap:12px;border:1px dashed var(--input);border-radius:5px;background:var(--card);padding:16px;color:var(--muted-foreground);cursor:pointer}
 .photo-drop:hover{border-color:var(--primary)}
 .photo-drop>svg{width:20px;flex:none;color:var(--primary)}
-.photo-drop span{display:flex;flex-direction:column;gap:3px;font-size:11px}
+.photo-drop>span{display:flex;flex-direction:column;gap:3px;font-size:11px}
 .photo-drop strong{color:var(--foreground)}
 .photo-drop small{font-size:10px}
 .photo-drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
@@ -989,8 +989,13 @@ input.select-trigger[aria-expanded=true]{border-color:var(--ring)}
 .select-popover.calendar-select-popover{width:auto;min-width:120px}
 .themed-calendar .rdp-nav{pointer-events:none}.themed-calendar .rdp-nav button{pointer-events:auto}
 /* Consultation assessment in "Complete visit" */
-.visit-assessment{border:1px solid var(--border);border-radius:6px;background:var(--card);padding:12px 14px}
-.visit-assessment .form-section-title{margin:0 0 10px;color:var(--foreground);font:700 11px var(--font-heading);text-transform:uppercase;letter-spacing:.02em}
+.visit-assessment{display:grid;gap:14px;margin-top:16px;border:1px solid var(--border);border-radius:6px;background:var(--card);padding:14px 16px}
+.visit-assessment .assessment-hint{color:var(--muted-foreground);font:400 10px/1.4 var(--font-body)}
+.assessment-photos{display:grid;gap:10px;border-top:1px solid var(--border);padding-top:14px}
+.assessment-photos header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 12px}
+.assessment-photos header small{color:var(--muted-foreground);font-size:10px}
+.assessment-photos .photo-drop{padding:12px 14px;background:var(--background)}
+.visit-assessment .form-section-title{margin:0;color:var(--foreground);font:700 11px var(--font-heading);text-transform:uppercase;letter-spacing:.02em}
 input.select-trigger::selection,.time-field>input::selection{background:transparent}
 
 /* Settings → Roles & permissions */
@@ -1020,3 +1025,11 @@ input.select-trigger::selection,.time-field>input::selection{background:transpar
 .perm-all:hover{text-decoration:underline}
 .roles-footer{display:flex;justify-content:flex-end;gap:8px}
 @media(max-width:760px){.roles-body{padding:14px}.perm-row{grid-template-columns:minmax(0,1fr) auto}.perm-actions{grid-column:1/-1;grid-row:2}.roles-footer{flex-direction:column-reverse}.roles-footer button{width:100%}}
+/* Surgery day, checked in: photos before starting */
+.surgery-photos{display:grid;gap:10px;margin-top:12px;border:1px solid var(--border);border-radius:6px;background:var(--card);padding:12px 14px}
+.surgery-photos header strong{display:flex;align-items:center;gap:6px;font-size:12px}
+.surgery-photos header strong svg{width:15px;color:var(--primary)}
+.surgery-photos header small{display:block;margin-top:3px;color:var(--muted-foreground);font-size:10px}
+.surgery-photos .photo-drop{padding:12px 14px;background:var(--background)}
+.surgery-photos-saved{color:var(--success);font-size:10px;font-weight:600}
+.surgery-photos-actions{display:flex;justify-content:flex-end}

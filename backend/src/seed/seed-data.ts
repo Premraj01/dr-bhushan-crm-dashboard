@@ -172,7 +172,7 @@ const demoAppointments: SeedEntity<Appointment>[] = [
   {
     id: 'APT-502',
     patientName: 'Vikram Bhosale',
-    type: 'Initial consultation',
+    type: 'Consultation',
     doctor: 'Dr. Bhushan Patil',
     startsAt: ist('2026-09-26T10:45:00'),
     durationMinutes: 30,

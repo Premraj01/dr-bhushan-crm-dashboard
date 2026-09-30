@@ -1639,6 +1639,59 @@ describe('CRM API (e2e)', () => {
         newPatient: { name: 'X', phone: '+91 90000 00001' },
       }).expect(400);
     });
+
+    it('registers a walk-in as a patient when they check in', async () => {
+      const checkIn = (id: string, body?: object) =>
+        request(app.getHttpServer())
+          .post(`/api/appointments/${id}/check-in`)
+          .set(authed())
+          .send(body);
+      type Apt = { id: string; patientId?: string; patientName: string };
+      const walkIn = async (patientName: string) =>
+        (
+          (
+            await book({
+              ...slot,
+              patientName,
+              startsAt: new Date().toISOString(),
+            }).expect(201)
+          ).body as Apt
+        ).id;
+
+      // No record and no phone number: can't check in yet
+      const id = await walkIn('Tanvi Kulkarni');
+      await checkIn(id).expect(400);
+
+      // With a mobile number: registered, linked and marked as visited today
+      const res = await checkIn(id, {
+        newPatient: { name: 'Tanvi Kulkarni', phone: '+91 90220 33445' },
+      }).expect(200);
+      const patientId = (res.body as Apt).patientId!;
+      expect(patientId).toMatch(/^PT-/);
+      const patient = await request(app.getHttpServer())
+        .get(`/api/patients/${patientId}`)
+        .set(authed())
+        .expect(200);
+      expect(patient.body).toMatchObject({
+        name: 'Tanvi Kulkarni',
+        phone: '+91 90220 33445',
+        lastVisit: new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Asia/Kolkata',
+        }).format(new Date()),
+      });
+
+      // A number already on file links that patient instead of a duplicate
+      const again = await walkIn('Tanvi K');
+      const linked = (
+        await checkIn(again, {
+          newPatient: { name: 'Tanvi K', phone: '9022033445' },
+        }).expect(200)
+      ).body as Apt;
+      expect(linked).toMatchObject({
+        patientId,
+        patientName: 'Tanvi Kulkarni',
+      });
+    });
   });
 
   describe('billing from the calendar', () => {
@@ -2473,7 +2526,7 @@ describe('CRM API (e2e)', () => {
         .post('/api/patients/PT-1081/photos')
         .set(authed())
         .field('angle', 'Frontal hairline')
-        .field('milestone', 'Pre-operative')
+        .field('milestone', 'Initial assessment')
         .field('takenOn', '2026-09-16')
         .attach('file', png, {
           filename: 'front.png',
@@ -2591,7 +2644,7 @@ describe('CRM API (e2e)', () => {
         .set(authed())
         .expect(200);
       expect(photos.body.length).toBeGreaterThanOrEqual(20);
-      expect(photos.body[0]).toMatchObject({ milestone: 'Pre-operative' });
+      expect(photos.body[0]).toMatchObject({ milestone: 'Initial assessment' });
       const img = await request(app.getHttpServer())
         .get(`/api/photos/${photos.body[0].id}/file`)
         .set(authed())

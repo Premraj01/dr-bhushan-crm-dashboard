@@ -3,86 +3,86 @@
     {
       "patientId": "PT-1079",
       "angle": "Frontal hairline",
-      "milestone": "Pre-operative",
+      "milestone": "Initial assessment",
       "takenOn": "2025-09-01",
       "note": "Baseline set before FUE; dry hair, clinic lighting",
       "uploadedBy": {
         "id": "USR-1",
         "name": "Dr. Bhushan Patil"
       },
-      "file": "photos/PT-1079-pre-operative-frontal-hairline.jpg"
+      "file": "photos/PT-1079-initial-assessment-frontal-hairline.jpg"
     },
     {
       "patientId": "PT-1079",
       "angle": "Top / vertex",
-      "milestone": "Pre-operative",
+      "milestone": "Initial assessment",
       "takenOn": "2025-09-01",
       "note": "Baseline set before FUE; dry hair, clinic lighting",
       "uploadedBy": {
         "id": "USR-1",
         "name": "Dr. Bhushan Patil"
       },
-      "file": "photos/PT-1079-pre-operative-top-vertex.jpg"
+      "file": "photos/PT-1079-initial-assessment-top-vertex.jpg"
     },
     {
       "patientId": "PT-1079",
       "angle": "Crown",
-      "milestone": "Pre-operative",
+      "milestone": "Initial assessment",
       "takenOn": "2025-09-01",
       "note": "Baseline set before FUE; dry hair, clinic lighting",
       "uploadedBy": {
         "id": "USR-1",
         "name": "Dr. Bhushan Patil"
       },
-      "file": "photos/PT-1079-pre-operative-crown.jpg"
+      "file": "photos/PT-1079-initial-assessment-crown.jpg"
     },
     {
       "patientId": "PT-1079",
       "angle": "Left profile",
-      "milestone": "Pre-operative",
+      "milestone": "Initial assessment",
       "takenOn": "2025-09-01",
       "note": "Baseline set before FUE; dry hair, clinic lighting",
       "uploadedBy": {
         "id": "USR-1",
         "name": "Dr. Bhushan Patil"
       },
-      "file": "photos/PT-1079-pre-operative-left-profile.jpg"
+      "file": "photos/PT-1079-initial-assessment-left-profile.jpg"
     },
     {
       "patientId": "PT-1079",
       "angle": "Right profile",
-      "milestone": "Pre-operative",
+      "milestone": "Initial assessment",
       "takenOn": "2025-09-01",
       "note": "Baseline set before FUE; dry hair, clinic lighting",
       "uploadedBy": {
         "id": "USR-1",
         "name": "Dr. Bhushan Patil"
       },
-      "file": "photos/PT-1079-pre-operative-right-profile.jpg"
+      "file": "photos/PT-1079-initial-assessment-right-profile.jpg"
     },
     {
       "patientId": "PT-1079",
       "angle": "Back (donor area)",
-      "milestone": "Pre-operative",
+      "milestone": "Initial assessment",
       "takenOn": "2025-09-01",
       "note": "Baseline set before FUE; dry hair, clinic lighting",
       "uploadedBy": {
         "id": "USR-1",
         "name": "Dr. Bhushan Patil"
       },
-      "file": "photos/PT-1079-pre-operative-back-donor-area.jpg"
+      "file": "photos/PT-1079-initial-assessment-back-donor-area.jpg"
     },
     {
       "patientId": "PT-1079",
       "angle": "Wet hair",
-      "milestone": "Pre-operative",
+      "milestone": "Initial assessment",
       "takenOn": "2025-09-01",
       "note": "Baseline set before FUE; dry hair, clinic lighting",
       "uploadedBy": {
         "id": "USR-1",
         "name": "Dr. Bhushan Patil"
       },
-      "file": "photos/PT-1079-pre-operative-wet-hair.jpg"
+      "file": "photos/PT-1079-initial-assessment-wet-hair.jpg"
     },
     {
       "patientId": "PT-1079",
@@ -297,92 +297,92 @@
     {
       "patientId": "PT-1083",
       "angle": "Frontal hairline",
-      "milestone": "Pre-operative",
+      "milestone": "Initial assessment",
       "takenOn": "2026-09-18",
       "uploadedBy": {
         "id": "USR-1",
         "name": "Dr. Bhushan Patil"
       },
-      "file": "photos/PT-1083-pre-operative-frontal-hairline.jpg"
+      "file": "photos/PT-1083-initial-assessment-frontal-hairline.jpg"
     },
     {
       "patientId": "PT-1083",
       "angle": "Top / vertex",
-      "milestone": "Pre-operative",
+      "milestone": "Initial assessment",
       "takenOn": "2026-09-18",
       "uploadedBy": {
         "id": "USR-1",
         "name": "Dr. Bhushan Patil"
       },
-      "file": "photos/PT-1083-pre-operative-top-vertex.jpg"
+      "file": "photos/PT-1083-initial-assessment-top-vertex.jpg"
     },
     {
       "patientId": "PT-1083",
       "angle": "Crown",
-      "milestone": "Pre-operative",
+      "milestone": "Initial assessment",
       "takenOn": "2026-09-18",
       "uploadedBy": {
         "id": "USR-1",
         "name": "Dr. Bhushan Patil"
       },
-      "file": "photos/PT-1083-pre-operative-crown.jpg"
+      "file": "photos/PT-1083-initial-assessment-crown.jpg"
     },
     {
       "patientId": "PT-1083",
       "angle": "Left profile",
-      "milestone": "Pre-operative",
+      "milestone": "Initial assessment",
       "takenOn": "2026-09-18",
       "uploadedBy": {
         "id": "USR-1",
         "name": "Dr. Bhushan Patil"
       },
-      "file": "photos/PT-1083-pre-operative-left-profile.jpg"
+      "file": "photos/PT-1083-initial-assessment-left-profile.jpg"
     },
     {
       "patientId": "PT-1083",
       "angle": "Right profile",
-      "milestone": "Pre-operative",
+      "milestone": "Initial assessment",
       "takenOn": "2026-09-18",
       "uploadedBy": {
         "id": "USR-1",
         "name": "Dr. Bhushan Patil"
       },
-      "file": "photos/PT-1083-pre-operative-right-profile.jpg"
+      "file": "photos/PT-1083-initial-assessment-right-profile.jpg"
     },
     {
       "patientId": "PT-1083",
       "angle": "Back (donor area)",
-      "milestone": "Pre-operative",
+      "milestone": "Initial assessment",
       "takenOn": "2026-09-18",
       "uploadedBy": {
         "id": "USR-1",
         "name": "Dr. Bhushan Patil"
       },
-      "file": "photos/PT-1083-pre-operative-back-donor-area.jpg"
+      "file": "photos/PT-1083-initial-assessment-back-donor-area.jpg"
     },
     {
       "patientId": "PT-1084",
       "angle": "Top / vertex",
-      "milestone": "Pre-operative",
+      "milestone": "Initial assessment",
       "takenOn": "2026-07-24",
       "note": "Baseline before PRP course",
       "uploadedBy": {
         "id": "USR-2",
         "name": "Dr. Sonal Desai"
       },
-      "file": "photos/PT-1084-pre-operative-top-vertex.jpg"
+      "file": "photos/PT-1084-initial-assessment-top-vertex.jpg"
     },
     {
       "patientId": "PT-1084",
       "angle": "Frontal hairline",
-      "milestone": "Pre-operative",
+      "milestone": "Initial assessment",
       "takenOn": "2026-07-24",
       "note": "Baseline before PRP course",
       "uploadedBy": {
         "id": "USR-2",
         "name": "Dr. Sonal Desai"
       },
-      "file": "photos/PT-1084-pre-operative-frontal-hairline.jpg"
+      "file": "photos/PT-1084-initial-assessment-frontal-hairline.jpg"
     },
     {
       "patientId": "PT-1084",

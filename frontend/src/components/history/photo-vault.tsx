@@ -141,7 +141,7 @@ export function PhotoVault({
         <div className="empty-state">
           <Camera />
           <h3>No photos yet</h3>
-          <p>Start with the pre-operative set: every angle, dry and wet.</p>
+          <p>Start with the initial assessment set: every angle, dry and wet.</p>
         </div>
       ) : mode === "compare" ? (
         <PhotoCompare photos={photos} onOpen={setViewing} />
@@ -205,24 +205,22 @@ export function PhotoVault({
   );
 }
 
-type Staged = { file: File; preview: string; angle: PhotoAngle };
+export type StagedPhoto = { file: File; preview: string; angle: PhotoAngle };
 
-function PhotoUpload({
-  patientId,
-  onDone,
+/**
+ * Choose photos and set each one's angle before uploading. Previews are freed when the
+ * picker unmounts.
+ */
+export function PhotoPicker({
+  staged,
+  onChange,
+  disabled,
 }: {
-  patientId: string;
-  onDone: (count: number) => void;
+  staged: StagedPhoto[];
+  onChange: (update: (current: StagedPhoto[]) => StagedPhoto[]) => void;
+  disabled?: boolean;
 }) {
-  const upload = useUploadPhoto(patientId);
-  const [staged, setStaged] = useState<Staged[]>([]);
-  const [milestone, setMilestone] = useState<PhotoMilestone>("Pre-operative");
-  const [takenOn, setTakenOn] = useState(clinicToday());
-  const [note, setNote] = useState("");
-  const [progress, setProgress] = useState<{ done: number; failed: string | null } | null>(null);
   const [tooBig, setTooBig] = useState<string[]>([]);
-
-  // Local previews are freed when the form closes.
   const previews = useRef<string[]>([]);
   useEffect(() => () => previews.current.forEach((u) => URL.revokeObjectURL(u)), []);
 
@@ -234,7 +232,7 @@ function PhotoUpload({
     if (!files) return;
     const list = [...files];
     setTooBig(list.filter((f) => f.size > MAX_UPLOAD_MB * 1024 * 1024).map((f) => f.name));
-    setStaged((s) => [
+    onChange((s) => [
       ...s,
       ...list
         .filter((f) => f.size <= MAX_UPLOAD_MB * 1024 * 1024)
@@ -246,6 +244,84 @@ function PhotoUpload({
         })),
     ]);
   };
+
+  return (
+    <>
+      <label className="photo-drop">
+        <Upload />
+        <span>
+          <span>
+            <strong>Choose photos</strong> or take them with the camera
+          </span>
+          <small>JPEG, PNG or WebP · up to {MAX_UPLOAD_MB} MB each · full resolution is kept</small>
+        </span>
+        <input
+          type="file"
+          accept={IMAGE_ACCEPT}
+          multiple
+          disabled={disabled}
+          onChange={(e) => {
+            add(e.target.files);
+            e.target.value = "";
+          }}
+        />
+      </label>
+      {tooBig.length > 0 && (
+        <Banner tone="warning">
+          Skipped (over {MAX_UPLOAD_MB} MB): {tooBig.join(", ")}
+        </Banner>
+      )}
+
+      {staged.length > 0 && (
+        <div className="staged-grid">
+          {staged.map((s, i) => (
+            <div key={s.preview} className="staged-card">
+              <img src={s.preview} alt="" />
+              <SelectInput
+                aria-label={`Angle for ${s.file.name}`}
+                value={s.angle}
+                disabled={disabled}
+                onChange={(e) =>
+                  onChange((list) =>
+                    list.map((x, j) =>
+                      j === i ? { ...x, angle: e.target.value as PhotoAngle } : x,
+                    ),
+                  )
+                }
+              >
+                {PHOTO_ANGLES.map((a) => (
+                  <option key={a}>{a}</option>
+                ))}
+              </SelectInput>
+              <button
+                type="button"
+                aria-label={`Remove ${s.file.name}`}
+                disabled={disabled}
+                onClick={() => onChange((list) => list.filter((_, j) => j !== i))}
+              >
+                <X />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+function PhotoUpload({
+  patientId,
+  onDone,
+}: {
+  patientId: string;
+  onDone: (count: number) => void;
+}) {
+  const upload = useUploadPhoto(patientId);
+  const [staged, setStaged] = useState<StagedPhoto[]>([]);
+  const [milestone, setMilestone] = useState<PhotoMilestone>("Initial assessment");
+  const [takenOn, setTakenOn] = useState(clinicToday());
+  const [note, setNote] = useState("");
+  const [progress, setProgress] = useState<{ done: number; failed: string | null } | null>(null);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -309,61 +385,7 @@ function PhotoUpload({
         </label>
       </div>
 
-      <label className="photo-drop">
-        <Upload />
-        <span>
-          <strong>Choose photos</strong> or take them with the camera
-          <small>JPEG, PNG or WebP · up to {MAX_UPLOAD_MB} MB each · full resolution is kept</small>
-        </span>
-        <input
-          type="file"
-          accept={IMAGE_ACCEPT}
-          multiple
-          onChange={(e) => {
-            add(e.target.files);
-            e.target.value = "";
-          }}
-        />
-      </label>
-      {tooBig.length > 0 && (
-        <Banner tone="warning">
-          Skipped (over {MAX_UPLOAD_MB} MB): {tooBig.join(", ")}
-        </Banner>
-      )}
-
-      {staged.length > 0 && (
-        <div className="staged-grid">
-          {staged.map((s, i) => (
-            <div key={s.preview} className="staged-card">
-              <img src={s.preview} alt="" />
-              <SelectInput
-                aria-label={`Angle for ${s.file.name}`}
-                value={s.angle}
-                disabled={busy}
-                onChange={(e) =>
-                  setStaged((list) =>
-                    list.map((x, j) =>
-                      j === i ? { ...x, angle: e.target.value as PhotoAngle } : x,
-                    ),
-                  )
-                }
-              >
-                {PHOTO_ANGLES.map((a) => (
-                  <option key={a}>{a}</option>
-                ))}
-              </SelectInput>
-              <button
-                type="button"
-                aria-label={`Remove ${s.file.name}`}
-                disabled={busy}
-                onClick={() => setStaged((list) => list.filter((_, j) => j !== i))}
-              >
-                <X />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      <PhotoPicker staged={staged} onChange={setStaged} disabled={busy} />
 
       {progress?.failed && <Banner tone="error">{progress.failed}</Banner>}
       <div className="photo-upload-actions">
