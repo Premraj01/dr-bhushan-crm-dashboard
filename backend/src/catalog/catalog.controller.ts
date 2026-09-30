@@ -9,7 +9,6 @@ import {
   Post,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Roles } from '../auth/roles.decorator';
 import {
   ConcernCatalogService,
   TreatmentCatalogService,
@@ -22,6 +21,7 @@ import {
   CreateTreatmentOptionDto,
   UpdateTreatmentOptionDto,
 } from './dto/treatment-option.dto';
+import { RequirePermission } from '../auth/require-permission.decorator';
 
 /** Settings → Treatments. Everyone can read; only admins can change the catalog. */
 @ApiTags('settings')
@@ -31,24 +31,25 @@ export class TreatmentCatalogController {
   constructor(private readonly treatments: TreatmentCatalogService) {}
 
   @Get()
+  @RequirePermission('catalog', 'view')
   findAll() {
     return this.treatments.list();
   }
 
   @Post()
-  @Roles('Admin')
+  @RequirePermission('catalog', 'manage')
   create(@Body() dto: CreateTreatmentOptionDto) {
     return this.treatments.create(dto);
   }
 
   @Patch(':id')
-  @Roles('Admin')
+  @RequirePermission('catalog', 'manage')
   update(@Param('id') id: string, @Body() dto: UpdateTreatmentOptionDto) {
     return this.treatments.update(id, dto);
   }
 
   @Delete(':id')
-  @Roles('Admin')
+  @RequirePermission('catalog', 'manage')
   @HttpCode(204)
   remove(@Param('id') id: string) {
     this.treatments.remove(id);
@@ -63,24 +64,25 @@ export class ConcernCatalogController {
   constructor(private readonly concerns: ConcernCatalogService) {}
 
   @Get()
+  @RequirePermission('catalog', 'view')
   findAll() {
     return this.concerns.list();
   }
 
   @Post()
-  @Roles('Admin')
+  @RequirePermission('catalog', 'manage')
   create(@Body() dto: CreateConcernOptionDto) {
     return this.concerns.create(dto);
   }
 
   @Patch(':id')
-  @Roles('Admin')
+  @RequirePermission('catalog', 'manage')
   update(@Param('id') id: string, @Body() dto: UpdateConcernOptionDto) {
     return this.concerns.update(id, dto);
   }
 
   @Delete(':id')
-  @Roles('Admin')
+  @RequirePermission('catalog', 'manage')
   @HttpCode(204)
   remove(@Param('id') id: string) {
     this.concerns.remove(id);

@@ -9,7 +9,7 @@ import { BillingModule } from './billing/billing.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { HttpThrottlerGuard } from './common/http-throttler.guard';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
-import { RolesGuard } from './auth/roles.guard';
+import { PermissionsGuard } from './auth/permissions.guard';
 import { envValidationSchema } from './config/env.validation';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { HealthController } from './health/health.controller';
@@ -21,6 +21,7 @@ import { PackagesModule } from './packages/packages.module';
 import { PatientsModule } from './patients/patients.module';
 import { PlansModule } from './plans/plans.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { RolesModule } from './roles/roles.module';
 import { TreatmentsModule } from './treatments/treatments.module';
 import { UsersModule } from './users/users.module';
 
@@ -35,6 +36,7 @@ import { UsersModule } from './users/users.module';
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 300 }]),
     AuthModule,
     UsersModule,
+    RolesModule,
     PatientsModule,
     AppointmentsModule,
     LeadsModule,
@@ -51,10 +53,10 @@ import { UsersModule } from './users/users.module';
   ],
   controllers: [HealthController],
   providers: [
-    // Order matters: rate-limit first, then authenticate, then check roles.
+    // Order matters: rate-limit first, then authenticate, then check permissions.
     { provide: APP_GUARD, useClass: HttpThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
-    { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
 })
 export class AppModule {}

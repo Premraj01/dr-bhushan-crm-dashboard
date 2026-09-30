@@ -15,6 +15,7 @@ import { BillingService } from './billing.service';
 import { EmiPlanDto } from './dto/emi-plan.dto';
 import { InvoicePdfService } from './invoice-pdf.service';
 import { ReceivePaymentDto } from './dto/receive-payment.dto';
+import { RequirePermission } from '../auth/require-permission.decorator';
 
 /** Billing from the appointment calendar: see what's owed and receive payments. */
 @ApiTags('billing')
@@ -24,11 +25,13 @@ export class BillingController {
   constructor(private readonly billing: BillingService) {}
 
   @Get('billing')
+  @RequirePermission('billing', 'view')
   bill(@Param('id') id: string) {
     return this.billing.bill(id);
   }
 
   @Post('payments')
+  @RequirePermission('billing', 'collect')
   receive(
     @Param('id') id: string,
     @Body() dto: ReceivePaymentDto,
@@ -39,6 +42,7 @@ export class BillingController {
 
   /** Pay the balance in EMIs (part payments on scheduled dates). */
   @Put('billing/emi')
+  @RequirePermission('billing', 'update')
   setEmi(
     @Param('id') id: string,
     @Body() dto: EmiPlanDto,
@@ -48,6 +52,7 @@ export class BillingController {
   }
 
   @Delete('billing/emi')
+  @RequirePermission('billing', 'update')
   clearEmi(@Param('id') id: string) {
     return this.billing.clearEmi(id);
   }
@@ -64,12 +69,14 @@ export class InvoiceBillingController {
   ) {}
 
   @Get('billing')
+  @RequirePermission('billing', 'view')
   bill(@Param('id') id: string) {
     return this.billing.invoiceBill(id);
   }
 
   /** The invoice as a PDF, to print or send to the patient. */
   @Get('pdf')
+  @RequirePermission('billing', 'view')
   async invoicePdf(@Param('id') id: string) {
     const pdf = await this.pdf.render(id);
     return new StreamableFile(pdf, {
@@ -80,6 +87,7 @@ export class InvoiceBillingController {
   }
 
   @Post('payments')
+  @RequirePermission('billing', 'collect')
   receive(
     @Param('id') id: string,
     @Body() dto: ReceivePaymentDto,
@@ -89,6 +97,7 @@ export class InvoiceBillingController {
   }
 
   @Put('billing/emi')
+  @RequirePermission('billing', 'update')
   setEmi(
     @Param('id') id: string,
     @Body() dto: EmiPlanDto,
@@ -98,6 +107,7 @@ export class InvoiceBillingController {
   }
 
   @Delete('billing/emi')
+  @RequirePermission('billing', 'update')
   clearEmi(@Param('id') id: string) {
     return this.billing.clearEmiForInvoice(id);
   }
@@ -111,6 +121,7 @@ export class BillingOverviewController {
   constructor(private readonly billing: BillingService) {}
 
   @Get('overview')
+  @RequirePermission('billing', 'view')
   overview() {
     return this.billing.overview();
   }

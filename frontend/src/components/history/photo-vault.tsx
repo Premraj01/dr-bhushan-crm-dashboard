@@ -31,6 +31,7 @@ import { ConfirmDialog } from "./shared";
 import { DateInput } from "@/components/form/date-input";
 import { ValidatedForm } from "@/components/form/validated-form";
 import { SelectInput } from "@/components/form/select-input";
+import { useCan } from "@/lib/use-permissions";
 
 const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp";
 
@@ -68,14 +69,13 @@ function PhotoConsentChip({ documents }: { documents: PatientDocument[] | undefi
 export function PhotoVault({
   patientId,
   documents,
-  isAdmin,
   onNotice,
 }: {
   patientId: string;
   documents: PatientDocument[] | undefined;
-  isAdmin: boolean;
   onNotice: (message: string) => void;
 }) {
+  const canDelete = useCan("photos", "delete");
   const { data: photos, isPending, isError, error } = usePhotos(patientId);
   const [adding, setAdding] = useState(false);
   const [mode, setMode] = useState<"timeline" | "compare">("timeline");
@@ -194,7 +194,7 @@ export function PhotoVault({
       <PhotoViewer
         photo={viewing}
         patientId={patientId}
-        canDelete={isAdmin}
+        canDelete={canDelete}
         onClose={() => setViewing(null)}
         onDeleted={() => {
           setViewing(null);

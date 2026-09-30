@@ -25,7 +25,7 @@ export class UsersService extends CrudService<User> implements OnModuleInit {
       this.config.getOrThrow<string>('SEED_ADMIN_PASSWORD'),
       10,
     );
-    const admin = this.repo.findAll().find((u) => u.role === 'Admin');
+    const admin = this.repo.findAll().find((u) => u.role === 'SuperAdmin');
     if (admin)
       this.repo.update(admin.id, { email, passwordHash, status: 'Active' });
   }

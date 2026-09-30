@@ -16,6 +16,7 @@ import { CreatePackageDto } from './dto/create-package.dto';
 import { SetGraftsDto } from './dto/set-grafts.dto';
 import { UpdatePackageDto } from './dto/update-package.dto';
 import { PackagesService } from './packages.service';
+import { RequirePermission } from '../auth/require-permission.decorator';
 
 /** Treatment plans applied to a patient (packages). Open to every signed-in role for now. */
 @ApiTags('packages')
@@ -25,11 +26,13 @@ export class PackagesController {
   constructor(private readonly packages: PackagesService) {}
 
   @Get('patients/:patientId/packages')
+  @RequirePermission('packages', 'view')
   findForPatient(@Param('patientId') patientId: string) {
     return this.packages.forPatient(patientId);
   }
 
   @Post('patients/:patientId/packages')
+  @RequirePermission('packages', 'create')
   create(
     @Param('patientId') patientId: string,
     @Body() dto: CreatePackageDto,
@@ -40,12 +43,14 @@ export class PackagesController {
 
   /** Packages whose surgery is waiting for a slot. */
   @Get('packages/pending')
+  @RequirePermission('packages', 'view')
   pending() {
     return this.packages.pendingQueue();
   }
 
   /** Plan visits coming due (next 7 days by default, or `?days=`), overdue ones included. */
   @Get('packages/due')
+  @RequirePermission('packages', 'view')
   due(@Query('days') days?: string) {
     const within = Number(days);
     return this.packages.dueReminders(
@@ -55,17 +60,20 @@ export class PackagesController {
 
   /** Price a package and project its dates without saving it. */
   @Post('packages/quote')
+  @RequirePermission('packages', 'view')
   quote(@Body() dto: CreatePackageDto) {
     return this.packages.quote(dto);
   }
 
   @Patch('packages/:id')
+  @RequirePermission('packages', 'update')
   setStatus(@Param('id') id: string, @Body() dto: UpdatePackageDto) {
     return this.packages.setStatus(id, dto.status);
   }
 
   /** Books step `index` (0-based) of the package into the appointment calendar. */
   @Post('packages/:id/sessions/:index/appointment')
+  @RequirePermission('packages', 'book')
   bookSession(
     @Param('id') id: string,
     @Param('index', ParseIntPipe) index: number,
@@ -76,6 +84,7 @@ export class PackagesController {
 
   /** Actual graft count for a surgery step, once the patient is checked in or it's done. */
   @Patch('packages/:id/sessions/:index/grafts')
+  @RequirePermission('packages', 'recordGrafts')
   setGrafts(
     @Param('id') id: string,
     @Param('index', ParseIntPipe) index: number,

@@ -15,7 +15,6 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import type { AuthUser } from '../auth/auth-user';
 import { CurrentUser } from '../auth/current-user.decorator';
-import { Roles } from '../auth/roles.decorator';
 import { DocumentsService } from './documents.service';
 import { HairAssessmentDto } from './dto/hair-assessment.dto';
 import { MedicalHistoryDto } from './dto/medical-history.dto';
@@ -27,6 +26,7 @@ import { HistoryService } from './history.service';
 import { PhotosService } from './photos.service';
 import { PrescriptionsService } from './prescriptions.service';
 import { CreatePrescriptionDto } from './dto/prescription.dto';
+import { RequirePermission } from '../auth/require-permission.decorator';
 
 const upload = FileInterceptor('file', {
   limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
@@ -54,6 +54,7 @@ export class HistoryOverviewController {
   constructor(private readonly overview: HistoryOverviewService) {}
 
   @Get()
+  @RequirePermission('history', 'view')
   list() {
     return this.overview.list();
   }
@@ -72,13 +73,14 @@ export class PatientHistoryController {
   ) {}
 
   @Get('history')
+  @RequirePermission('history', 'view')
   get(@Param('id') id: string) {
     return this.history.get(id);
   }
 
   /** Clinical sections are recorded by clinicians. */
   @Put('history/medical')
-  @Roles('Admin', 'Doctor')
+  @RequirePermission('history', 'update')
   setMedical(
     @Param('id') id: string,
     @Body() dto: MedicalHistoryDto,
@@ -88,7 +90,7 @@ export class PatientHistoryController {
   }
 
   @Put('history/hair')
-  @Roles('Admin', 'Doctor')
+  @RequirePermission('history', 'update')
   setHair(
     @Param('id') id: string,
     @Body() dto: HairAssessmentDto,
@@ -98,13 +100,14 @@ export class PatientHistoryController {
   }
 
   @Get('prescriptions')
+  @RequirePermission('prescriptions', 'view')
   listPrescriptions(@Param('id') id: string) {
     return this.prescriptions.list(id);
   }
 
   /** Prescribing outside a visit (refill, teleconsultation) — clinicians only. */
   @Post('prescriptions')
-  @Roles('Admin', 'Doctor')
+  @RequirePermission('prescriptions', 'create')
   prescribe(
     @Param('id') id: string,
     @Body() dto: CreatePrescriptionDto,
@@ -114,11 +117,13 @@ export class PatientHistoryController {
   }
 
   @Get('photos')
+  @RequirePermission('photos', 'view')
   listPhotos(@Param('id') id: string) {
     return this.photos.list(id);
   }
 
   @Post('photos')
+  @RequirePermission('photos', 'upload')
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(upload)
   uploadPhoto(
@@ -131,11 +136,13 @@ export class PatientHistoryController {
   }
 
   @Get('documents')
+  @RequirePermission('documents', 'view')
   listDocuments(@Param('id') id: string) {
     return this.documents.list(id);
   }
 
   @Post('documents')
+  @RequirePermission('documents', 'upload')
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(upload)
   uploadDocument(
@@ -155,12 +162,13 @@ export class PhotosController {
   constructor(private readonly photos: PhotosService) {}
 
   @Get(':id/file')
+  @RequirePermission('photos', 'view')
   file(@Param('id') id: string) {
     return download(this.photos.content(id));
   }
 
   @Delete(':id')
-  @Roles('Admin')
+  @RequirePermission('photos', 'delete')
   @HttpCode(204)
   remove(@Param('id') id: string) {
     this.photos.remove(id);
@@ -174,18 +182,20 @@ export class DocumentsController {
   constructor(private readonly documents: DocumentsService) {}
 
   @Get(':id/file')
+  @RequirePermission('documents', 'view')
   file(@Param('id') id: string) {
     return download(this.documents.content(id));
   }
 
   @Post(':id/revoke')
+  @RequirePermission('documents', 'revoke')
   @HttpCode(200)
   revoke(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.documents.revoke(id, user);
   }
 
   @Delete(':id')
-  @Roles('Admin')
+  @RequirePermission('documents', 'delete')
   @HttpCode(204)
   remove(@Param('id') id: string) {
     this.documents.remove(id);
@@ -200,7 +210,7 @@ export class PrescriptionsController {
 
   /** A doctor stops the medicines early. The prescription stays on record. */
   @Post(':id/stop')
-  @Roles('Admin', 'Doctor')
+  @RequirePermission('prescriptions', 'stop')
   @HttpCode(200)
   stop(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.prescriptions.stop(id, user);

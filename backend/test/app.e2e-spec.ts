@@ -32,6 +32,20 @@ describe('CRM API (e2e)', () => {
   });
 
   const authed = () => ({ Authorization: `Bearer ${token}` });
+  // Demo logins are rate limited, so the RBAC tests share one token per role.
+  const roleTokens = new Map<string, string>();
+  const asDemo = async (role: string) => {
+    if (!roleTokens.has(role))
+      roleTokens.set(
+        role,
+        (
+          await request(app.getHttpServer())
+            .post('/api/auth/demo')
+            .send({ role })
+        ).body.accessToken as string,
+      );
+    return { Authorization: `Bearer ${roleTokens.get(role)}` };
+  };
 
   it('rejects unauthenticated requests and bad credentials', async () => {
     await request(app.getHttpServer()).get('/api/patients').expect(401);
@@ -42,9 +56,10 @@ describe('CRM API (e2e)', () => {
   });
 
   it.each([
-    ['Admin', 'Dr. Bhushan Patil'],
+    ['SuperAdmin', 'Dr. Bhushan Patil'],
     ['Doctor', 'Dr. Sonal Desai'],
-    ['Reception', 'Priya More'],
+    ['Receptionist', 'Priya More'],
+    ['Nurse', 'Meera Jadhav'],
   ])('demo login signs in as %s', async (role, name) => {
     const res = await request(app.getHttpServer())
       .post('/api/auth/demo')
@@ -112,10 +127,108 @@ describe('CRM API (e2e)', () => {
     }
   });
 
+  it('sends the signed-in role’s permissions with the user', async () => {
+    const nurse = await request(app.getHttpServer())
+      .post('/api/auth/demo')
+      .send({ role: 'Nurse' })
+      .expect(200);
+    expect(nurse.body.user.permissions).toEqual(
+      expect.arrayContaining(['patients.view', 'appointments.checkIn']),
+    );
+    expect(nurse.body.user.permissions).not.toContain('billing.view');
+    const me = await request(app.getHttpServer())
+      .get('/api/auth/me')
+      .set(authed())
+      .expect(200);
+    expect(me.body.permissions).toEqual(
+      expect.arrayContaining(['team.invite', 'patients.delete']),
+    );
+  });
+
+  it('enforces each role’s module permissions', async () => {
+    const server = app.getHttpServer();
+    const nurse = await asDemo('Nurse');
+    await request(server).get('/api/patients').set(nurse).expect(200);
+    await request(server).get('/api/billing/overview').set(nurse).expect(403);
+    await request(server).get('/api/leads').set(nurse).expect(403);
+    await request(server)
+      .post('/api/appointments')
+      .set(nurse)
+      .send({})
+      .expect(403);
+    const receptionist = await asDemo('Receptionist');
+    await request(server)
+      .get('/api/billing/overview')
+      .set(receptionist)
+      .expect(200);
+    await request(server)
+      .post('/api/appointments/APT-1/complete')
+      .set(receptionist)
+      .expect(403);
+    await request(server)
+      .post('/api/users/invite')
+      .set(await asDemo('Doctor'))
+      .send({ name: 'X', email: 'x@example.com', role: 'Nurse' })
+      .expect(403);
+  });
+
+  it('lets a Super Admin change what a role may do', async () => {
+    const server = app.getHttpServer();
+    const nurse = await asDemo('Nurse');
+    const doctor = await asDemo('Doctor');
+    const roles = await request(server)
+      .get('/api/roles')
+      .set(doctor)
+      .expect(200);
+    expect(roles.body.modules.leads).toEqual([
+      'view',
+      'create',
+      'update',
+      'delete',
+    ]);
+    const before = (
+      roles.body.roles as { role: string; permissions: string[] }[]
+    ).find((r) => r.role === 'Nurse')!.permissions;
+
+    await request(server).get('/api/leads').set(nurse).expect(403);
+    await request(server)
+      .put('/api/roles/Nurse/permissions')
+      .set(doctor)
+      .send({ permissions: [...before, 'leads.view'] })
+      .expect(403);
+    await request(server)
+      .put('/api/roles/Nurse/permissions')
+      .set(authed())
+      .send({ permissions: ['leads.fly'] })
+      .expect(400);
+    await request(server)
+      .put('/api/roles/SuperAdmin/permissions')
+      .set(authed())
+      .send({ permissions: [] })
+      .expect(403);
+    const updated = await request(server)
+      .put('/api/roles/Nurse/permissions')
+      .set(authed())
+      .send({ permissions: [...before, 'leads.view'] })
+      .expect(200);
+    expect(updated.body.permissions).toContain('leads.view');
+    // Applies to the nurse's existing token straight away.
+    await request(server).get('/api/leads').set(nurse).expect(200);
+    const me = await request(server).get('/api/auth/me').set(nurse);
+    expect(me.body.permissions).toContain('leads.view');
+
+    await request(server)
+      .put('/api/roles/Nurse/permissions')
+      .set(authed())
+      .send({ permissions: before })
+      .expect(200);
+    await request(server).get('/api/leads').set(nurse).expect(403);
+  });
+
   it('only lets admins delete records', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/auth/demo')
-      .send({ role: 'Reception' })
+      .send({ role: 'Receptionist' })
       .expect(200);
     await request(app.getHttpServer())
       .delete('/api/leads/LD-301')
@@ -187,7 +300,9 @@ describe('CRM API (e2e)', () => {
     it('lets any role manage stock but only admins delete', async () => {
       const server = app.getHttpServer();
       const reception = (
-        await request(server).post('/api/auth/demo').send({ role: 'Reception' })
+        await request(server)
+          .post('/api/auth/demo')
+          .send({ role: 'Receptionist' })
       ).body.accessToken as string;
       const asReception = { Authorization: `Bearer ${reception}` };
       await request(server)
@@ -581,7 +696,7 @@ describe('CRM API (e2e)', () => {
       const reception = (
         await request(app.getHttpServer())
           .post('/api/auth/demo')
-          .send({ role: 'Reception' })
+          .send({ role: 'Receptionist' })
       ).body.accessToken as string;
       const body = { items: [{ name: 'Finasteride 1 mg', frequency: 'OD' }] };
       await request(app.getHttpServer())
@@ -612,7 +727,9 @@ describe('CRM API (e2e)', () => {
           'Hair transplant with PRP care',
         ]),
       );
-      const reception = { Authorization: `Bearer ${await demo('Reception')}` };
+      const reception = {
+        Authorization: `Bearer ${await demo('Receptionist')}`,
+      };
       const plan = {
         name: 'Roller cycle',
         items: [
@@ -1582,7 +1699,7 @@ describe('CRM API (e2e)', () => {
       const reception = (
         await request(app.getHttpServer())
           .post('/api/auth/demo')
-          .send({ role: 'Reception' })
+          .send({ role: 'Receptionist' })
       ).body.accessToken as string;
       const part = await pay(
         id,
@@ -2316,7 +2433,7 @@ describe('CRM API (e2e)', () => {
 
       await request(app.getHttpServer())
         .put('/api/patients/PT-1081/history/medical')
-        .set(await asRole('Reception'))
+        .set(await asRole('Receptionist'))
         .send(medical)
         .expect(403);
       await request(app.getHttpServer())
@@ -2345,7 +2462,7 @@ describe('CRM API (e2e)', () => {
 
       const all = await request(app.getHttpServer())
         .get('/api/patients/PT-1081/history')
-        .set(await asRole('Reception'))
+        .set(await asRole('Receptionist'))
         .expect(200);
       expect(all.body.hair).toMatchObject({ grade: 'III vertex' });
       expect(all.body.medical.medications[0].affectsBleeding).toBe(true);
@@ -2395,7 +2512,7 @@ describe('CRM API (e2e)', () => {
 
       await request(app.getHttpServer())
         .delete(`/api/photos/${up.body.id}`)
-        .set(await asRole('Reception'))
+        .set(await asRole('Receptionist'))
         .expect(403);
       await request(app.getHttpServer())
         .delete(`/api/photos/${up.body.id}`)
@@ -2407,7 +2524,7 @@ describe('CRM API (e2e)', () => {
       const pdf = Buffer.from('%PDF-1.4\n%%EOF');
       const doc = await request(app.getHttpServer())
         .post('/api/patients/PT-1081/documents')
-        .set(await asRole('Reception'))
+        .set(await asRole('Receptionist'))
         .field('kind', 'Photo consent')
         .field('title', 'Before/after photo consent')
         .field('signedAt', '2026-09-16T10:30:00+05:30')

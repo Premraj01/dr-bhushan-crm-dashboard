@@ -992,3 +992,31 @@ input.select-trigger[aria-expanded=true]{border-color:var(--ring)}
 .visit-assessment{border:1px solid var(--border);border-radius:6px;background:var(--card);padding:12px 14px}
 .visit-assessment .form-section-title{margin:0 0 10px;color:var(--foreground);font:700 11px var(--font-heading);text-transform:uppercase;letter-spacing:.02em}
 input.select-trigger::selection,.time-field>input::selection{background:transparent}
+
+/* Settings → Roles & permissions */
+.roles-body{display:flex;flex-direction:column;gap:14px;padding:18px}
+.role-picker{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.role-picker button{display:flex;flex-direction:column;gap:3px;border:1px solid var(--border);border-radius:6px;background:var(--card);padding:11px 13px;color:var(--foreground);text-align:left;cursor:pointer;transition:.15s}
+.role-picker button:hover{border-color:color-mix(in oklab,var(--primary) 40%,var(--border))}
+.role-picker button.active{border-color:var(--primary);background:var(--teal-soft);box-shadow:inset 0 0 0 1px var(--primary)}
+.role-picker strong{display:flex;align-items:center;gap:6px;font-size:12px}
+.role-picker strong svg{width:12px;color:var(--muted-foreground)}
+.role-picker small{color:var(--muted-foreground);font-size:10px}
+.role-dirty{width:7px;height:7px;border-radius:99px;background:var(--warning)}
+.perm-list{overflow:hidden;border:1px solid var(--border);border-radius:6px}
+.perm-row{display:grid;grid-template-columns:minmax(170px,.8fr) minmax(0,2fr) auto;align-items:center;gap:14px;border-bottom:1px solid var(--border);padding:11px 14px}
+.perm-row:last-child{border-bottom:0}
+.perm-row.is-off .perm-module{opacity:.6}
+.perm-module strong,.perm-module span{display:block}
+.perm-module strong{font-size:12px}
+.perm-module span{margin-top:3px;color:var(--muted-foreground);font-size:10px}
+.perm-actions{display:flex;flex-wrap:wrap;gap:6px}
+.perm-chip{display:inline-flex;min-height:28px;align-items:center;gap:4px;border:1px solid var(--border);border-radius:99px;background:transparent;padding:0 11px;color:var(--muted-foreground);font-size:11px;font-weight:600;cursor:pointer;transition:.15s}
+.perm-chip svg{width:12px}
+.perm-chip:hover:not(:disabled){border-color:var(--primary);color:var(--primary)}
+.perm-chip[aria-pressed=true]{border-color:color-mix(in oklab,var(--primary) 45%,transparent);background:var(--teal-soft);color:var(--primary)}
+.perm-chip:disabled{cursor:default}
+.perm-all{border:0;background:transparent;color:var(--primary);font-size:11px;font-weight:600;white-space:nowrap;cursor:pointer}
+.perm-all:hover{text-decoration:underline}
+.roles-footer{display:flex;justify-content:flex-end;gap:8px}
+@media(max-width:760px){.roles-body{padding:14px}.perm-row{grid-template-columns:minmax(0,1fr) auto}.perm-actions{grid-column:1/-1;grid-row:2}.roles-footer{flex-direction:column-reverse}.roles-footer button{width:100%}}

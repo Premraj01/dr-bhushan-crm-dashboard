@@ -16,6 +16,7 @@ import {
   UpdateTreatmentPlanDto,
 } from './dto/treatment-plan.dto';
 import { PlansService } from './plans.service';
+import { RequirePermission } from '../auth/require-permission.decorator';
 
 /** Settings → Treatment plans. Open to every signed-in role for now. */
 @ApiTags('settings')
@@ -25,21 +26,25 @@ export class PlansController {
   constructor(private readonly plans: PlansService) {}
 
   @Get()
+  @RequirePermission('plans', 'view')
   findAll() {
     return this.plans.list();
   }
 
   @Post()
+  @RequirePermission('plans', 'create')
   create(@Body() dto: CreateTreatmentPlanDto, @CurrentUser() user: AuthUser) {
     return this.plans.create(dto, user.name);
   }
 
   @Patch(':id')
+  @RequirePermission('plans', 'update')
   update(@Param('id') id: string, @Body() dto: UpdateTreatmentPlanDto) {
     return this.plans.update(id, dto);
   }
 
   @Delete(':id')
+  @RequirePermission('plans', 'delete')
   @HttpCode(204)
   remove(@Param('id') id: string) {
     this.plans.remove(id);

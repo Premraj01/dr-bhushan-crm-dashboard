@@ -26,7 +26,7 @@ export class AuthController {
     return this.auth.login(dto);
   }
 
-  /** Passwordless sign-in as a seeded Admin, Doctor or Reception account (DEMO_LOGINS only). */
+  /** Passwordless sign-in as a seeded account of the given role (DEMO_LOGINS only). */
   @Public()
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('demo')
@@ -45,6 +45,6 @@ export class AuthController {
   @ApiBearerAuth()
   @Get('me')
   me(@CurrentUser() user: AuthUser) {
-    return this.users.toPublic(this.users.findOne(user.id));
+    return this.auth.session(this.users.findOne(user.id));
   }
 }

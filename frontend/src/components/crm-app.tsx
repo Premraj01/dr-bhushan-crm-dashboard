@@ -5,7 +5,7 @@ import {
   Activity, AlertTriangle, BarChart3, Bell, BellRing, CalendarDays, Check, ChevronDown,
   ChevronRight, CircleDollarSign, RefreshCw, ClipboardList, ClipboardPlus, Clock3, CreditCard, FileText,
   FlaskConical, LayoutDashboard, ListOrdered, LoaderCircle, LogOut, Menu, MessageCircle, Moon, MoreHorizontal, Package,
-  Phone, Plus, Search, Settings, Sparkles, Sun, UserRound, Users, X, Zap,
+  Phone, Plus, Search, Settings, ShieldCheck, Sparkles, Sun, UserRound, Users, X, Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -13,7 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { api, getToken } from "@/lib/api";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSocketEvent } from "@/lib/socket";
 import { Banner, PageHeader, SectionHeader, StatusChip } from "@/components/crm-ui";
 import { AppointmentsView, type Scheduling } from "@/components/appointments/appointments-view";
@@ -38,22 +38,26 @@ import { rememberPatientLayout, savedPatientLayout, type PatientLayout } from "@
 import { CatalogDialog, ConcernCatalogPanel, TreatmentCatalogPanel, type CatalogEditor } from "@/components/settings/catalog-settings";
 import { PlansSettingsPanel } from "@/components/plans/plans-settings";
 import { ClinicTimingsSettings } from "@/components/settings/clinic-timings-settings";
+import { RolesSettings, ROLES_QUERY_KEY } from "@/components/settings/roles-settings";
 import type { TreatmentPlan } from "@/components/plans/plans-api";
 import logoMark from "@/assets/logo-mark.png";
 import { useNavigate } from "@tanstack/react-router";
-import { consumeJustLoggedIn, getSessionUser, greetingName, initials, mockSignOut, ROLE_LABELS } from "@/lib/mock-auth";
+import { consumeJustLoggedIn, greetingName, initials, mockSignOut, ROLE_LABELS } from "@/lib/mock-auth";
+import { can, type Module } from "@/lib/permissions";
+import { useSessionUser } from "@/lib/use-permissions";
 
 type ClinicAlert = { tone: "success" | "warning" | "error" | "neutral"; title: string; message: string; at: string };
 type View = "Dashboard" | "Patients" | "History" | "Appointments" | "Leads" | "Treatments" | "Billing" | "Inventory" | "Reminders" | "Reports" | "Settings";
 type Icon = ComponentType<{ className?: string }>;
 
-const navItems: { label: View; icon: Icon }[] = [
-  { label: "Dashboard", icon: LayoutDashboard }, { label: "Patients", icon: Users },
-  { label: "History", icon: ClipboardList },
-  { label: "Appointments", icon: CalendarDays }, { label: "Leads", icon: MessageCircle },
-  { label: "Treatments", icon: FlaskConical }, { label: "Billing", icon: CreditCard },
-  { label: "Inventory", icon: Package },
-  { label: "Reminders", icon: BellRing }, { label: "Reports", icon: BarChart3 }, { label: "Settings", icon: Settings },
+/** `module` hides the page from roles without its "view" permission; Settings is open to everyone. */
+const navItems: { label: View; icon: Icon; module?: Module }[] = [
+  { label: "Dashboard", icon: LayoutDashboard, module: "dashboard" }, { label: "Patients", icon: Users, module: "patients" },
+  { label: "History", icon: ClipboardList, module: "history" },
+  { label: "Appointments", icon: CalendarDays, module: "appointments" }, { label: "Leads", icon: MessageCircle, module: "leads" },
+  { label: "Treatments", icon: FlaskConical, module: "treatments" }, { label: "Billing", icon: CreditCard, module: "billing" },
+  { label: "Inventory", icon: Package, module: "inventory" },
+  { label: "Reminders", icon: BellRing, module: "reminders" }, { label: "Reports", icon: BarChart3, module: "reports" }, { label: "Settings", icon: Settings },
 ];
 
 
@@ -184,13 +188,14 @@ function ReportsView({ onExport }: { onExport: () => void }) {
   return <><PageHeader title="Reports" description="Revenue, treatment outcomes and clinic performance" action="Export report" onAction={onExport} /><div className="metrics-grid compact"><MetricCard label="Revenue YTD" value="₹82.6L" note="16.8%" icon={CircleDollarSign}/><MetricCard label="Patient retention" value="78%" note="4.1%" icon={Users}/><MetricCard label="PRP completion" value="84%" note="6.2%" icon={Activity}/><MetricCard label="Lead conversion" value="31%" note="2.8%" icon={BarChart3}/></div><div className="reports-grid"><section className="panel chart-panel"><SectionHeader title="Monthly revenue" subtitle="October 2025 – September 2026" trailing={<StatusChip tone="success">+16.8% YoY</StatusChip>} /><div className="bar-chart">{months.map((h,i)=><div key={i}><span style={{height:`${h}%`}} /><small>{["O","N","D","J","F","M","A","M","J","J","A","S"][i]}</small></div>)}</div></section><section className="panel"><SectionHeader title="Outcome quality" subtitle="Patient-reported at 6 months" /><div className="outcomes">{[["Excellent","62%"],["Good","28%"],["Moderate","8%"],["Needs review","2%"]].map(([l,v])=><div key={l}><div><span>{l}</span><strong>{v}</strong></div><div className="progress-track"><span className="progress-fill" style={{width:v}} /></div></div>)}</div></section></div></>;
 }
 
-type SettingsTab = "Team access" | "Treatments" | "Treatment plans" | "Concerns" | "Clinic profile" | "Clinic timings" | "Notifications" | "Billing settings";
+type SettingsTab = "Team access" | "Roles & permissions" | "Treatments" | "Treatment plans" | "Concerns" | "Clinic profile" | "Clinic timings" | "Notifications" | "Billing settings";
 const settingsTabs: { label: SettingsTab; icon: Icon }[] = [
-  { label: "Team access", icon: UserRound }, { label: "Treatments", icon: FlaskConical }, { label: "Treatment plans", icon: ListOrdered }, { label: "Concerns", icon: ClipboardList },
+  { label: "Team access", icon: UserRound }, { label: "Roles & permissions", icon: ShieldCheck }, { label: "Treatments", icon: FlaskConical }, { label: "Treatment plans", icon: ListOrdered }, { label: "Concerns", icon: ClipboardList },
   { label: "Clinic profile", icon: Settings }, { label: "Clinic timings", icon: Clock3 }, { label: "Notifications", icon: Bell }, { label: "Billing settings", icon: CreditCard },
 ];
 
-function SettingsView({ onInvite, onNotice, onOpenAppointments, isAdmin }: { onInvite: () => void; onNotice: (message: string) => void; onOpenAppointments: () => void; isAdmin: boolean }) {
+function SettingsView({ onInvite, onNotice, onOpenAppointments }: { onInvite: () => void; onNotice: (message: string) => void; onOpenAppointments: () => void }) {
+  const user = useSessionUser();
   const [tab, setTab] = useState<SettingsTab>("Team access");
   const [editor, setEditor] = useState<CatalogEditor | null>(null);
   const [planEditing, setPlanEditing] = useState<"new" | TreatmentPlan | null>(null);
@@ -198,12 +203,15 @@ function SettingsView({ onInvite, onNotice, onOpenAppointments, isAdmin }: { onI
     : tab === "Concerns" ? { action: "Add concern", onAction: () => setEditor({ kind: "concerns" }) }
     : tab === "Treatment plans" ? { action: "New plan", onAction: () => setPlanEditing("new") }
     : tab === "Team access" ? { action: "Invite team member", onAction: onInvite } : {};
-  const canAct = tab === "Team access" || tab === "Treatment plans" || isAdmin;
+  const canAct = tab === "Team access" ? can(user, "team", "invite")
+    : tab === "Treatment plans" ? can(user, "plans", "create")
+    : can(user, "catalog", "manage");
   const panel = tab === "Team access"
     ? <section className="panel"><SectionHeader title="Team access" subtitle="Manage members and their permissions" /><div className="team-list">{[["DB","Dr. Bhushan Patil","Admin · Lead doctor","Active"],["SD","Dr. Sonal Desai","Doctor","Active"],["PM","Priya More","Reception","Active"],["AK","Ashwini Kale","Reception","Invited"]].map(m=><div className="team-row" key={m[1]}><span className="team-avatar">{m[0]}</span><div><strong>{m[1]}</strong><small>{m[2]}</small></div><StatusChip tone={m[3]==="Active"?"success":"warning"}>{m[3]}</StatusChip><Button variant="ghost" size="icon"><MoreHorizontal/></Button></div>)}</div></section>
-    : tab === "Treatments" ? <TreatmentCatalogPanel isAdmin={isAdmin} onNotice={onNotice} onEdit={(item) => setEditor({ kind: "treatments", item })} />
+    : tab === "Roles & permissions" ? <RolesSettings onNotice={onNotice} />
+    : tab === "Treatments" ? <TreatmentCatalogPanel onNotice={onNotice} onEdit={(item) => setEditor({ kind: "treatments", item })} />
     : tab === "Treatment plans" ? <PlansSettingsPanel editing={planEditing} onEditingChange={setPlanEditing} onNotice={onNotice} />
-    : tab === "Concerns" ? <ConcernCatalogPanel isAdmin={isAdmin} onNotice={onNotice} onEdit={(item) => setEditor({ kind: "concerns", item })} />
+    : tab === "Concerns" ? <ConcernCatalogPanel onNotice={onNotice} onEdit={(item) => setEditor({ kind: "concerns", item })} />
     : tab === "Clinic timings" ? <ClinicTimingsSettings onNotice={onNotice} onReschedule={onOpenAppointments} />
     : <section className="panel"><SectionHeader title={tab} /><div className="empty-state"><Settings /><h3>Coming soon</h3><p>{tab} will be configurable here.</p></div></section>;
   return <><PageHeader title="Settings" description="Clinic preferences, team access, treatments, plans and concerns" action={canAct ? header.action : undefined} onAction={header.onAction} /><div className="settings-layout"><nav className="settings-nav" aria-label="Settings sections">{settingsTabs.map(t => <button key={t.label} className={cn(tab === t.label && "active")} aria-current={tab === t.label ? "page" : undefined} onClick={() => setTab(t.label)}><t.icon />{t.label}</button>)}</nav>{panel}</div><CatalogDialog editor={editor} onOpenChange={(open) => !open && setEditor(null)} onNotice={onNotice} /></>;
@@ -241,26 +249,29 @@ export function CRMApp() {
   useEffect(()=>{const isDark=localStorage.getItem("drb-theme")==="dark";setDark(isDark);document.documentElement.classList.toggle("dark",isDark)},[]);
   useEffect(()=>{if(!booting)return;consumeJustLoggedIn();const t=setTimeout(()=>setBooting(false),3000);return ()=>clearTimeout(t)},[booting]);
   const nav=useNavigate();
-  const [user]=useState(getSessionUser);
+  const user=useSessionUser(); const queryClient=useQueryClient();
+  const allowedNav=navItems.filter(item=>!item.module||can(user,item.module,"view"));
   // Sidebar status: real server health, re-checked every minute.
   const health=useQuery({queryKey:["health"],queryFn:()=>api<{status:string}>("/health"),refetchInterval:60_000,retry:0});
   // Live notifications pushed by the server (e.g. "Payment received"); kept for this session.
   const onAlert=useCallback((n:ClinicAlert)=>{setAlerts(list=>[n,...list].slice(0,20));setUnread(u=>u+1)},[]);
   useSocketEvent<ClinicAlert>("notification",onAlert,getToken()!==null);
-  const canCreatePackages=user.role==="Admin"||user.role==="Doctor";
-  const handleSignOut=()=>{setOverlay("Signing you out…");setTimeout(()=>{mockSignOut();nav({to:"/auth",replace:true})},2000)};
+  // A Super Admin changed a role's access: refresh ours so menus and buttons match at once.
+  const onRoleUpdated=useCallback(()=>{void queryClient.invalidateQueries({queryKey:["auth","me"]});void queryClient.invalidateQueries({queryKey:ROLES_QUERY_KEY})},[queryClient]);
+  useSocketEvent("role.updated",onRoleUpdated,getToken()!==null);
+  const handleSignOut=()=>{setOverlay("Signing you out…");setTimeout(()=>{mockSignOut();queryClient.clear();nav({to:"/auth",replace:true})},2000)};
   const toggleTheme=()=>setDark(v=>{const next=!v;document.documentElement.classList.toggle("dark",next);localStorage.setItem("drb-theme",next?"dark":"light");return next});
   const navigate=useCallback((label:View)=>{setLoading(true);setView(label);setMobile(false);setTimeout(()=>setLoading(false),900)},[]);
   const scheduleSessions=useCallback((pkg:{id:string;patientId:string},index?:number)=>{setProfile(null);setEditing(null);setScheduling({packageId:pkg.id,patientId:pkg.patientId,...(index!==undefined&&{index})});navigate("Appointments")},[navigate]);
   const title = view;
-  const content=useMemo(()=>{const show=(k:string)=>setAction(k); switch(view){case "Dashboard":return <Dashboard onNotice={setNotice} onBook={()=>setBooking(true)} onCalendar={()=>navigate("Appointments")} onSchedule={scheduleSessions} onPatient={setProfile} onViewPatients={()=>navigate("Patients")} userName={user.name}/>;case "Patients":return <PatientsView onAdd={()=>setAddingPatient(true)} onSelect={setProfile}/>;case "History":return <HistoryView onOpen={setHistoryFor}/>;case "Appointments":return <AppointmentsView scheduling={scheduling} onStartScheduling={setScheduling} onEndScheduling={()=>setScheduling(null)} onOpenPatient={setProfile} onCreatePackage={(id,planId)=>setEditing({id,tab:"package",planId})} onNotice={setNotice}/>;case "Leads":return <LeadsView onAdd={()=>show("Add enquiry")}/>;case "Treatments":return <TreatmentsView onAdd={()=>show("Record treatment")}/>;case "Billing":return <BillingView onNotice={setNotice} onOpenPatient={setProfile}/>;case "Inventory":return <InventoryView isAdmin={user.role==="Admin"} onNotice={setNotice}/>;case "Reminders":return <RemindersView onNotice={setNotice}/>;case "Reports":return <ReportsView onExport={()=>{setNotice("Report exported successfully.")}}/>;case "Settings":return <SettingsView onInvite={()=>show("Invite team member")} onNotice={setNotice} onOpenAppointments={()=>navigate("Appointments")} isAdmin={user.role==="Admin"}/>;}},[view,user.name,user.role,scheduling,scheduleSessions,navigate]);
+  const content=useMemo(()=>{const show=(k:string)=>setAction(k); switch(view){case "Dashboard":return <Dashboard onNotice={setNotice} onBook={()=>setBooking(true)} onCalendar={()=>navigate("Appointments")} onSchedule={scheduleSessions} onPatient={setProfile} onViewPatients={()=>navigate("Patients")} userName={user.name}/>;case "Patients":return <PatientsView onAdd={()=>setAddingPatient(true)} onSelect={setProfile}/>;case "History":return <HistoryView onOpen={setHistoryFor}/>;case "Appointments":return <AppointmentsView scheduling={scheduling} onStartScheduling={setScheduling} onEndScheduling={()=>setScheduling(null)} onOpenPatient={setProfile} onCreatePackage={(id,planId)=>setEditing({id,tab:"package",planId})} onNotice={setNotice}/>;case "Leads":return <LeadsView onAdd={()=>show("Add enquiry")}/>;case "Treatments":return <TreatmentsView onAdd={()=>show("Record treatment")}/>;case "Billing":return <BillingView onNotice={setNotice} onOpenPatient={setProfile}/>;case "Inventory":return <InventoryView onNotice={setNotice}/>;case "Reminders":return <RemindersView onNotice={setNotice}/>;case "Reports":return <ReportsView onExport={()=>{setNotice("Report exported successfully.")}}/>;case "Settings":return <SettingsView onInvite={()=>show("Invite team member")} onNotice={setNotice} onOpenAppointments={()=>navigate("Appointments")}/>;}},[view,user.name,scheduling,scheduleSessions,navigate]);
   return <div className="app-shell">
     {(booting||overlay)&&<AppLoader label={booting?"Preparing your clinic workspace…":overlay??"Loading…"}/>}
     {mobile&&<button className="mobile-overlay" onClick={()=>setMobile(false)} aria-label="Close navigation"/>}
-    <aside className={cn("sidebar",mobile&&"mobile-open")}><div className="brand"><div className="brand-mark"><img src={logoMark} alt="Dr. Bhushan’s Rejuvenation logo" width={38} height={38} loading="lazy"/></div><div><strong>Dr. Bhushan’s</strong><span>REJUVENATION</span></div><Button variant="ghost" size="icon" className="mobile-close" onClick={()=>setMobile(false)} aria-label="Close menu"><X/></Button></div><div className="clinic-label">Clinic workspace</div><nav>{navItems.map(item=><button key={item.label} onClick={()=>navigate(item.label)} className={cn(view===item.label&&"active")}><item.icon/><span>{item.label}</span>{view===item.label&&<ChevronRight/>}</button>)}</nav><div className="sidebar-foot"><div className={cn("support",health.isError&&"support-down")}><span><Activity/></span><div><strong>Clinic status</strong><small>{health.isPending?"Checking…":health.isError?"Server unreachable":"All systems operational"}</small></div></div><p>Dr. Bhushan’s Rejuvenation<br/>Pune, Maharashtra</p></div></aside>
+    <aside className={cn("sidebar",mobile&&"mobile-open")}><div className="brand"><div className="brand-mark"><img src={logoMark} alt="Dr. Bhushan’s Rejuvenation logo" width={38} height={38} loading="lazy"/></div><div><strong>Dr. Bhushan’s</strong><span>REJUVENATION</span></div><Button variant="ghost" size="icon" className="mobile-close" onClick={()=>setMobile(false)} aria-label="Close menu"><X/></Button></div><div className="clinic-label">Clinic workspace</div><nav>{allowedNav.map(item=><button key={item.label} onClick={()=>navigate(item.label)} className={cn(view===item.label&&"active")}><item.icon/><span>{item.label}</span>{view===item.label&&<ChevronRight/>}</button>)}</nav><div className="sidebar-foot"><div className={cn("support",health.isError&&"support-down")}><span><Activity/></span><div><strong>Clinic status</strong><small>{health.isPending?"Checking…":health.isError?"Server unreachable":"All systems operational"}</small></div></div><p>Dr. Bhushan’s Rejuvenation<br/>Pune, Maharashtra</p></div></aside>
     <div className="workspace"><header className="topbar"><div className="topbar-left"><Button variant="ghost" size="icon" className="menu-button" onClick={()=>setMobile(true)} aria-label="Open navigation"><Menu/></Button><div><span className="mobile-title">{title}</span></div><label className="global-search"><Search/><input value={globalSearch} onChange={e=>setGlobalSearch(e.target.value)} placeholder="Search patients, appointments…"/><kbd>⌘ K</kbd></label></div><div className="top-actions"><Button variant="ghost" size="icon" onClick={toggleTheme} aria-label={dark?"Use light mode":"Use dark mode"}>{dark?<Sun/>:<Moon/>}</Button><DropdownMenu open={notifications} onOpenChange={v=>{setNotifications(v);if(v)setUnread(0)}}><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="notification-button" aria-label={unread?`Notifications, ${unread} new`:"Notifications"}><Bell/>{unread>0&&<span>{unread>9?"9+":unread}</span>}</Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="notification-menu"><DropdownMenuLabel>Notifications</DropdownMenuLabel><DropdownMenuSeparator/>{alerts.length===0?<p className="notification-empty">You’re all caught up. Payments and other updates will show here as they happen.</p>:alerts.slice(0,8).map((n,i)=><DropdownMenuItem key={`${n.at}-${i}`}><span className={cn("menu-icon",n.tone==="success"&&"success",n.tone==="warning"&&"warning")}>{n.tone==="success"?<Check/>:n.tone==="warning"?<Clock3/>:<CalendarDays/>}</span><div><strong>{n.title}</strong><small>{n.message} · {clinicTimeOf(n.at)}</small></div></DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu><div className="top-separator"/><DropdownMenu><DropdownMenuTrigger asChild><button className="profile-trigger"><span>{initials(user.name)}</span><div><strong>{greetingName(user.name)}</strong><small>{ROLE_LABELS[user.role]}</small></div><ChevronDown/></button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuLabel>{user.name}<small className="block font-normal text-muted-foreground">{user.email}</small></DropdownMenuLabel><DropdownMenuSeparator/><DropdownMenuItem><UserRound/>Profile</DropdownMenuItem><DropdownMenuItem onClick={()=>navigate("Settings")}><Settings/>Settings</DropdownMenuItem><DropdownMenuSeparator/><DropdownMenuItem onClick={handleSignOut}><LogOut/>Sign out</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></header>
       <main>{notice&&<Banner tone="success" onClose={()=>setNotice(null)}>{notice}</Banner>}{globalSearch.length>1&&<div className="search-result"><Search/><span>Quick search for <strong>“{globalSearch}”</strong></span><button onClick={()=>{setGlobalSearch("");navigate("Patients")}}>Search patient records<ChevronRight/></button></div>}{loading?<LoadingShowcase/>:content}</main>
     </div>
-    <AddPatientDialog open={addingPatient} onOpenChange={setAddingPatient} onCreated={p=>{setAddingPatient(false);setNotice(`${p.name} registered as ${p.id}.`);setProfile(p.id)}}/><ActionModal open={action!==null} onOpenChange={v=>!v&&setAction(null)} kind={action??"Add record"} onSuccess={setNotice}/><PatientProfileDialog patientId={profile} canCreatePackages={canCreatePackages} canEditRecord={view==="Patients"} onOpenChange={v=>!v&&setProfile(null)} onEdit={(id,tab)=>{setProfile(null);setEditing({id,tab})}} onOpenHistory={id=>{setProfile(null);setHistoryFor(id)}}/><PatientHistoryDialog patientId={historyFor} canEditClinical={canCreatePackages} isAdmin={user.role==="Admin"} onOpenChange={v=>!v&&setHistoryFor(null)}/><AppointmentDialog open={booking} onOpenChange={setBooking} onSaved={({appointment:a,isNewPatient})=>{setBooking(false);setNotice(`Booked ${a.patientName}${isNewPatient?" (new patient)":""} · ${a.type} at ${clinicTimeOf(a.startsAt)}.`)}}/><EditPatientDialog editing={editing} canCreatePackages={canCreatePackages} onPackageCreated={pkg=>{setEditing(null);setScheduling(null);if(pkg.steps.some(s=>s.surgery)){setProfile(null);navigate("Appointments");setNotice(`${pkg.name} (${pkg.id}) created for ${pkg.patientName}. The surgery is in Pending bookings — click a date to schedule it, or use Schedule in the queue.`)}else{setProfile(pkg.patientId);setNotice(`${pkg.name} (${pkg.id}) created for ${pkg.patientName} · ${pkg.steps.length} visits, first due ${formatDay(pkg.startDate)}. Book each visit as a normal appointment — it links to the plan.`)}}} onOpenChange={v=>!v&&setEditing(null)} onNotice={setNotice}/>
+    <AddPatientDialog open={addingPatient} onOpenChange={setAddingPatient} onCreated={p=>{setAddingPatient(false);setNotice(`${p.name} registered as ${p.id}.`);setProfile(p.id)}}/><ActionModal open={action!==null} onOpenChange={v=>!v&&setAction(null)} kind={action??"Add record"} onSuccess={setNotice}/><PatientProfileDialog patientId={profile} canEditRecord={view==="Patients"} onOpenChange={v=>!v&&setProfile(null)} onEdit={(id,tab)=>{setProfile(null);setEditing({id,tab})}} onOpenHistory={id=>{setProfile(null);setHistoryFor(id)}}/><PatientHistoryDialog patientId={historyFor} onOpenChange={v=>!v&&setHistoryFor(null)}/><AppointmentDialog open={booking} onOpenChange={setBooking} onSaved={({appointment:a,isNewPatient})=>{setBooking(false);setNotice(`Booked ${a.patientName}${isNewPatient?" (new patient)":""} · ${a.type} at ${clinicTimeOf(a.startsAt)}.`)}}/><EditPatientDialog editing={editing} onPackageCreated={pkg=>{setEditing(null);setScheduling(null);if(pkg.steps.some(s=>s.surgery)){setProfile(null);navigate("Appointments");setNotice(`${pkg.name} (${pkg.id}) created for ${pkg.patientName}. The surgery is in Pending bookings — click a date to schedule it, or use Schedule in the queue.`)}else{setProfile(pkg.patientId);setNotice(`${pkg.name} (${pkg.id}) created for ${pkg.patientName} · ${pkg.steps.length} visits, first due ${formatDay(pkg.startDate)}. Book each visit as a normal appointment — it links to the plan.`)}}} onOpenChange={v=>!v&&setEditing(null)} onNotice={setNotice}/>
   </div>;
 }

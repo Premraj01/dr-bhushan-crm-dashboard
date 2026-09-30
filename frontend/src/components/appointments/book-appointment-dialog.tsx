@@ -328,7 +328,7 @@ function AppointmentForm({
   const [doctor, setDoctor] = useState(() => {
     if (appointment) return appointment.doctor;
     const me = getSessionUser();
-    return me.role === "Reception" ? "" : me.name;
+    return me.role === "Doctor" || me.role === "SuperAdmin" ? me.name : "";
   });
   const [notes, setNotes] = useState(appointment?.notes ?? "");
   const [touched, setTouched] = useState(false);

@@ -1,6 +1,6 @@
 import { Entity } from '../common/entity';
 
-export const ROLES = ['Admin', 'Doctor', 'Reception'] as const;
+export const ROLES = ['SuperAdmin', 'Doctor', 'Nurse', 'Receptionist'] as const;
 export type Role = (typeof ROLES)[number];
 
 export interface User extends Entity {

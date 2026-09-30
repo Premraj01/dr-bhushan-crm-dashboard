@@ -51,6 +51,7 @@ import { api, ApiError, getToken } from "@/lib/api";
 import { useSocketEvent } from "@/lib/socket";
 import { ValidatedForm } from "@/components/form/validated-form";
 import { SelectInput } from "@/components/form/select-input";
+import { useCan } from "@/lib/use-permissions";
 
 export const TREATMENT_CATEGORIES = ["PRP", "Transplant", "Consultation", "Scalp therapy"] as const;
 export type TreatmentCategory = (typeof TREATMENT_CATEGORIES)[number];
@@ -164,7 +165,6 @@ function useCatalogMutations<T extends CatalogItem>(resource: Resource) {
 /* ---------- list panels ---------- */
 
 type PanelProps<T> = {
-  isAdmin: boolean;
   onEdit: (item: T) => void;
   onNotice: (message: string) => void;
 };
@@ -252,7 +252,6 @@ function CatalogPanel<T extends CatalogItem>({
   trailing,
   card,
   badge,
-  isAdmin,
   onEdit,
   onNotice,
 }: PanelProps<T> & {
@@ -274,6 +273,7 @@ function CatalogPanel<T extends CatalogItem>({
     listTitle: string;
   };
 }) {
+  const canManage = useCan("catalog", "manage");
   const { data, isPending, isError, error, refetch, isRefetching } = useCatalog<T>(resource);
   const { save, remove } = useCatalogMutations<T>(resource);
   const [search, setSearch] = useState("");
@@ -298,7 +298,7 @@ function CatalogPanel<T extends CatalogItem>({
   }
 
   const itemMenu = (item: T) =>
-    isAdmin && (
+    canManage && (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" aria-label={`Actions for ${item.name}`}>
@@ -366,7 +366,7 @@ function CatalogPanel<T extends CatalogItem>({
         }
       />
       <div className="catalog-body">
-        {!isAdmin && (
+        {!canManage && (
           <Banner tone="warning">
             You can view the {title.toLowerCase()} catalog. Only Super Admins can add or change
             entries.

@@ -65,6 +65,7 @@ import {
 } from "@/components/plans/plans-api";
 import { useDebounced } from "@/lib/use-debounced";
 import { SelectInput } from "@/components/form/select-input";
+import { useCan } from "@/lib/use-permissions";
 
 export type EditTab = "details" | "package";
 
@@ -78,20 +79,20 @@ const PACKAGE_TONE: Record<PackageStatus, Tone> = {
 
 export function PatientProfileDialog({
   patientId,
-  canCreatePackages,
   canEditRecord,
   onOpenChange,
   onEdit,
   onOpenHistory,
 }: {
   patientId: string | null;
-  canCreatePackages: boolean;
   /** "Edit patient record" is offered only from the Patients page. */
   canEditRecord: boolean;
   onOpenChange: (open: boolean) => void;
   onEdit: (id: string, tab: EditTab) => void;
   onOpenHistory: (id: string) => void;
 }) {
+  const canCreatePackages = useCan("packages", "create");
+  const canUpdatePatient = useCan("patients", "update");
   const { data: patient, isPending } = usePatient(patientId);
   const { data: history, isSuccess: historyLoaded } = useHistory(patientId);
   const { data: packages } = usePackages(patientId);
@@ -174,7 +175,7 @@ export function PatientProfileDialog({
                 <ClipboardList />
                 Patient history
               </Button>
-              {canEditRecord && (
+              {canEditRecord && canUpdatePatient && (
                 <Button onClick={() => onEdit(patient.id, "details")}>
                   <Pencil />
                   Edit patient record
@@ -527,19 +528,18 @@ function PriceLines({
 
 export function EditPatientDialog({
   editing,
-  canCreatePackages,
   onOpenChange,
   onNotice,
   onPackageCreated,
 }: {
   /** `planId` pre-selects that plan in the package builder (after a consultation). */
   editing: { id: string; tab: EditTab; planId?: string } | null;
-  canCreatePackages: boolean;
   onOpenChange: (open: boolean) => void;
   onNotice: (message: string) => void;
   /** Called after "Next" — the parent takes the user to the calendar to book sessions. */
   onPackageCreated: (pkg: TreatmentPackage) => void;
 }) {
+  const canCreatePackages = useCan("packages", "create");
   const { data: patient } = usePatient(editing?.id ?? null);
   const [tab, setTab] = useState<EditTab>("details");
   const [lastEditing, setLastEditing] = useState(editing);

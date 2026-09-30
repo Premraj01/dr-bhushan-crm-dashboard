@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
-  CalendarCheck2, ChevronRight, Headset, LoaderCircle, Lock, Mail, ShieldCheck, Sparkles, Stethoscope, UserRound,
+  CalendarCheck2, ChevronRight, Headset, HeartPulse, LoaderCircle, Lock, Mail, ShieldCheck, Sparkles, Stethoscope, UserRound,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,9 +26,10 @@ export const Route = createFileRoute("/auth")({
 });
 
 const DEMO_ACCOUNTS: { role: Role; person: string; icon: LucideIcon }[] = [
-  { role: "Admin", person: "Dr. Bhushan Patil · full access", icon: ShieldCheck },
+  { role: "SuperAdmin", person: "Dr. Bhushan Patil · full access", icon: ShieldCheck },
   { role: "Doctor", person: "Dr. Sonal Desai · clinical", icon: Stethoscope },
-  { role: "Reception", person: "Priya More · front desk", icon: Headset },
+  { role: "Nurse", person: "Meera Jadhav · patient care", icon: HeartPulse },
+  { role: "Receptionist", person: "Priya More · front desk", icon: Headset },
 ];
 
 function AuthPage() {

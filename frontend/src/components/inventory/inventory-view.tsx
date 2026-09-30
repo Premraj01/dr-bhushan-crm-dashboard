@@ -61,6 +61,7 @@ import {
 import { DateInput } from "@/components/form/date-input";
 import { ValidatedForm } from "@/components/form/validated-form";
 import { SelectInput } from "@/components/form/select-input";
+import { useCan } from "@/lib/use-permissions";
 
 type Filter = "all" | "attention" | "low" | "out" | "soon" | "expired";
 const FILTERS: { value: Filter; label: string }[] = [
@@ -171,13 +172,8 @@ function savedLayout(): Layout {
   }
 }
 
-export function InventoryView({
-  isAdmin,
-  onNotice,
-}: {
-  isAdmin: boolean;
-  onNotice: (message: string) => void;
-}) {
+export function InventoryView({ onNotice }: { onNotice: (message: string) => void }) {
+  const canDelete = useCan("inventory", "delete");
   const today = clinicToday();
   const { data, isPending, isError, error, refetch, isRefetching } = useInventory();
   const [search, setSearch] = useState("");
@@ -232,7 +228,7 @@ export function InventoryView({
           <Pencil />
           Edit product
         </DropdownMenuItem>
-        {isAdmin && (
+        {canDelete && (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem

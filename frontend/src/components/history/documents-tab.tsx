@@ -23,6 +23,7 @@ import { ValidatedForm } from "@/components/form/validated-form";
 import { dateTime, fileSize } from "./format";
 import { ConfirmDialog } from "./shared";
 import { SelectInput } from "@/components/form/select-input";
+import { useCan } from "@/lib/use-permissions";
 
 const DEFAULT_TITLE: Record<DocumentKind, string> = {
   "Surgery consent": "Informed consent — hair transplant surgery",
@@ -85,7 +86,6 @@ export function DocumentsTab({
   isPending,
   error,
   clearance,
-  isAdmin,
   onNotice,
 }: {
   patientId: string;
@@ -93,9 +93,9 @@ export function DocumentsTab({
   isPending: boolean;
   error: unknown;
   clearance: MedicalHistory["clearance"] | undefined;
-  isAdmin: boolean;
   onNotice: (message: string) => void;
 }) {
+  const canDelete = useCan("documents", "delete");
   const [adding, setAdding] = useState(false);
   const [revoking, setRevoking] = useState<PatientDocument | null>(null);
   const [deleting, setDeleting] = useState<PatientDocument | null>(null);
@@ -187,7 +187,7 @@ export function DocumentsTab({
                     Withdraw
                   </Button>
                 )}
-                {isAdmin && (
+                {canDelete && (
                   <Button
                     size="icon"
                     variant="ghost"

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, getToken } from "@/lib/api";
+import type { Role } from "@/lib/mock-auth";
 import { getSocket } from "@/lib/socket";
 import type { Tone } from "@/components/crm-ui";
 
@@ -72,7 +73,7 @@ export type MedicineRequest = { itemId: string; quantity: number };
 type TeamMember = {
   id: string;
   name: string;
-  role: "Admin" | "Doctor" | "Reception";
+  role: Role;
   status: string;
 };
 
@@ -279,7 +280,8 @@ export function useDoctors() {
   return useQuery({
     queryKey: ["team"],
     queryFn: () => api<TeamMember[]>("/users"),
-    select: (team) => team.filter((m) => m.status === "Active" && m.role !== "Reception"),
+    select: (team) =>
+      team.filter((m) => m.status === "Active" && (m.role === "Doctor" || m.role === "SuperAdmin")),
     retry: 1,
   });
 }

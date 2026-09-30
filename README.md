@@ -34,11 +34,11 @@ In development, Vite proxies `/api` and `/socket.io` to the backend, so the fron
 | --- | --- |
 | `POST /api/auth/login`, `POST /api/auth/register`, `GET /api/auth/me` | JWT auth (registration is off unless `ALLOW_REGISTRATION=true`) |
 | `/api/patients`, `/api/appointments`, `/api/leads`, `/api/treatments`, `/api/invoices` | CRUD with filters, e.g. `?search=`, `?date=YYYY-MM-DD`, `?stage=`, `?status=` |
-| `GET /api/users`, `POST /api/users/invite` | Team access (inviting and deleting records need the Admin role) |
+| `GET /api/users`, `POST /api/users/invite` | Team access (inviting and deleting records need the Super Admin role) |
 | `GET /api/dashboard/summary` | Dashboard metrics |
 | `GET /api/health` | Liveness check (public) |
 
-Every route needs `Authorization: Bearer <token>` unless it is marked `@Public()`.
+Every route needs `Authorization: Bearer <token>` unless it is marked `@Public()`, and is limited by role through `@RequirePermission(module, action)` — the role → permission matrix is in [`backend/src/auth/permissions.ts`](backend/src/auth/permissions.ts).
 
 **Realtime.** Connect with `io('/realtime', { auth: { token } })`. Sockets without a valid JWT are rejected during the handshake. The server emits:
 

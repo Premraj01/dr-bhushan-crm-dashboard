@@ -1,25 +1,44 @@
 import { api, ApiError, setToken } from "./api";
+import { ALL_PERMISSIONS, type Permission } from "./permissions";
 import { disconnectSocket } from "./socket";
 
 const KEY = "drb-auth";
 const JUST_LOGGED_IN = "drb-just-logged-in";
 const USER_KEY = "drb-user";
 
-export type Role = "Admin" | "Doctor" | "Reception";
+export type Role = "SuperAdmin" | "Doctor" | "Nurse" | "Receptionist";
 
-export type SessionUser = { name: string; email: string; role: Role; title?: string };
-
-export const ROLE_LABELS: Record<Role, string> = {
-  Admin: "Super Admin",
-  Doctor: "Doctor",
-  Reception: "Receptionist",
+export type SessionUser = {
+  name: string;
+  email: string;
+  role: Role;
+  title?: string;
+  /** What this role may do, from the server — check with `can()` / `useCan()` in `permissions.ts`. */
+  permissions: Permission[];
 };
 
-/** Seeded accounts used when the backend isn't reachable (offline demo). */
+export const ROLE_LABELS: Record<Role, string> = {
+  SuperAdmin: "Super Admin",
+  Doctor: "Doctor",
+  Nurse: "Nurse",
+  Receptionist: "Receptionist",
+};
+
+/**
+ * Seeded accounts used when the backend isn't reachable (offline demo). There's no
+ * server to ask for permissions, and nothing can be saved anyway, so every screen shows.
+ */
+const offline = (name: string, email: string, role: Role): SessionUser => ({
+  name,
+  email,
+  role,
+  permissions: ALL_PERMISSIONS,
+});
 const OFFLINE_DEMO_USERS: Record<Role, SessionUser> = {
-  Admin: { name: "Dr. Bhushan Patil", email: "admin@drbhushan.clinic", role: "Admin" },
-  Doctor: { name: "Dr. Sonal Desai", email: "sonal@drbhushan.clinic", role: "Doctor" },
-  Reception: { name: "Priya More", email: "priya@drbhushan.clinic", role: "Reception" },
+  SuperAdmin: offline("Dr. Bhushan Patil", "admin@drbhushan.clinic", "SuperAdmin"),
+  Doctor: offline("Dr. Sonal Desai", "sonal@drbhushan.clinic", "Doctor"),
+  Nurse: offline("Meera Jadhav", "meera@drbhushan.clinic", "Nurse"),
+  Receptionist: offline("Priya More", "priya@drbhushan.clinic", "Receptionist"),
 };
 
 export function isAuthed(): boolean {
@@ -30,11 +49,15 @@ export function isAuthed(): boolean {
 function startSession(user: SessionUser) {
   localStorage.setItem(KEY, "1");
   localStorage.setItem(JUST_LOGGED_IN, "1");
+  saveSessionUser(user);
+}
+
+export function saveSessionUser(user: SessionUser) {
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 
 export function mockSignIn(name?: string) {
-  startSession({ ...OFFLINE_DEMO_USERS.Admin, ...(name && { name }) });
+  startSession({ ...OFFLINE_DEMO_USERS.SuperAdmin, ...(name && { name }) });
 }
 
 /**
@@ -64,11 +87,12 @@ export async function demoSignIn(role: Role): Promise<SessionUser> {
 export function getSessionUser(): SessionUser {
   try {
     const raw = localStorage.getItem(USER_KEY);
-    if (raw) return JSON.parse(raw) as SessionUser;
+    // Sessions saved before permissions existed have none until /auth/me refreshes them.
+    if (raw) return { permissions: [], ...(JSON.parse(raw) as Omit<SessionUser, "permissions">) };
   } catch {
     // fall through to the default demo user
   }
-  return OFFLINE_DEMO_USERS.Admin;
+  return OFFLINE_DEMO_USERS.SuperAdmin;
 }
 
 export function mockSignOut() {

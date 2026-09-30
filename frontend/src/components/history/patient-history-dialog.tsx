@@ -30,6 +30,7 @@ import { SafetyStrip } from "./safety-strip";
 import { VisitsTab } from "./visits-tab";
 import { useCompletedVisits } from "@/components/appointments/appointments-api";
 import { errorText } from "@/lib/api";
+import { useCan } from "@/lib/use-permissions";
 
 export type HistoryTab =
   "medical" | "hair" | "visits" | "prescriptions" | "photos" | "documents" | "financial";
@@ -37,17 +38,14 @@ export type HistoryTab =
 /** The patient's full record: medical baseline, hair assessment, photos, consents and billing. */
 export function PatientHistoryDialog({
   patientId,
-  canEditClinical,
-  isAdmin,
   onOpenChange,
 }: {
   patientId: string | null;
-  /** Doctors and admins record the medical history and hair assessment. */
-  canEditClinical: boolean;
-  /** Only admins delete photos and documents. */
-  isAdmin: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const canEditClinical = useCan("history", "update");
+  const canPrescribe = useCan("prescriptions", "create");
+  const canSeeBilling = useCan("billing", "view");
   const { data: patient } = usePatient(patientId);
   const history = useHistory(patientId);
   const documents = useDocuments(patientId);
@@ -125,10 +123,12 @@ export function PatientHistoryDialog({
                 <FileSignature />
                 Consent & documents
               </TabsTrigger>
-              <TabsTrigger value="financial">
-                <IndianRupee />
-                Financial
-              </TabsTrigger>
+              {canSeeBilling && (
+                <TabsTrigger value="financial">
+                  <IndianRupee />
+                  Financial
+                </TabsTrigger>
+              )}
             </TabsList>
 
             <TabsContent value="medical">
@@ -162,17 +162,12 @@ export function PatientHistoryDialog({
             <TabsContent value="prescriptions">
               <PrescriptionsTab
                 patientId={patientId}
-                canPrescribe={canEditClinical}
+                canPrescribe={canPrescribe}
                 onNotice={notify}
               />
             </TabsContent>
             <TabsContent value="photos">
-              <PhotoVault
-                patientId={patientId}
-                documents={documents.data}
-                isAdmin={isAdmin}
-                onNotice={notify}
-              />
+              <PhotoVault patientId={patientId} documents={documents.data} onNotice={notify} />
             </TabsContent>
             <TabsContent value="documents">
               <DocumentsTab
@@ -181,13 +176,14 @@ export function PatientHistoryDialog({
                 isPending={documents.isPending}
                 error={documents.error}
                 clearance={history.data?.medical?.clearance}
-                isAdmin={isAdmin}
                 onNotice={notify}
               />
             </TabsContent>
-            <TabsContent value="financial">
-              <FinancialTab patientId={patientId} onNotice={notify} />
-            </TabsContent>
+            {canSeeBilling && (
+              <TabsContent value="financial">
+                <FinancialTab patientId={patientId} onNotice={notify} />
+              </TabsContent>
+            )}
           </Tabs>
         )}
       </DialogContent>

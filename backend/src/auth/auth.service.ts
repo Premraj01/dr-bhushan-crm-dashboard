@@ -12,6 +12,7 @@ import { AuthUser, JwtPayload } from './auth-user';
 import { DemoLoginDto } from './dto/demo-login.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { permissionsOf } from './permissions';
 
 @Injectable()
 export class AuthService {
@@ -35,7 +36,7 @@ export class AuthService {
     if (!this.config.get<boolean>('ALLOW_REGISTRATION')) {
       throw new ForbiddenException('Self-service registration is disabled');
     }
-    const user = await this.users.register({ ...dto, role: 'Reception' });
+    const user = await this.users.register({ ...dto, role: 'Receptionist' });
     return this.issueToken(user);
   }
 
@@ -70,7 +71,12 @@ export class AuthService {
     };
     return {
       accessToken: await this.jwt.signAsync(payload),
-      user: this.users.toPublic(user),
+      user: this.session(user),
     };
+  }
+
+  /** The signed-in user plus what their role may do, for the frontend to show or hide actions. */
+  session(user: User) {
+    return { ...this.users.toPublic(user), permissions: permissionsOf(user) };
   }
 }
