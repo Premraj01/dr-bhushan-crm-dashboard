@@ -12,6 +12,8 @@ import {
   type BillPath,
   type Installment,
 } from "./appointments-api";
+import { DateInput } from "@/components/form/date-input";
+import { SelectInput } from "@/components/form/select-input";
 
 const INSTALLMENT_TONE: Record<Installment["status"], Tone> = {
   Paid: "success",
@@ -115,7 +117,7 @@ export function EmiPlanner({
         )}
         <label>
           Number of EMIs
-          <select
+          <SelectInput
             value={count}
             onChange={(e) => {
               setCount(Number(e.target.value));
@@ -127,11 +129,11 @@ export function EmiPlanner({
                 {n} payments
               </option>
             ))}
-          </select>
+          </SelectInput>
         </label>
         <label>
           Frequency
-          <select
+          <SelectInput
             value={every}
             onChange={(e) => {
               setEvery(Number(e.target.value));
@@ -141,17 +143,16 @@ export function EmiPlanner({
             <option value={1}>Monthly</option>
             <option value={2}>Every 2 months</option>
             <option value={3}>Every 3 months</option>
-          </select>
+          </SelectInput>
         </label>
         <label className="full">
           First EMI due on
-          <input
-            type="date"
+          <DateInput
             min={clinicToday()}
             value={first}
-            onChange={(e) => {
-              setFirst(e.target.value);
-              if (e.target.value) regenerate({ first: e.target.value });
+            onChange={(value) => {
+              setFirst(value);
+              if (value) regenerate({ first: value });
             }}
           />
         </label>
@@ -161,15 +162,12 @@ export function EmiPlanner({
         {rows.map((r, i) => (
           <li key={i}>
             <span className="step-no">{i + 1}</span>
-            <input
-              type="date"
+            <DateInput
               aria-label={`EMI ${i + 1} due date`}
               value={r.dueDate}
               min={i === 0 ? clinicToday() : addDays(rows[i - 1]!.dueDate, 1)}
-              onChange={(e) =>
-                setRows((all) =>
-                  all.map((x, j) => (j === i ? { ...x, dueDate: e.target.value } : x)),
-                )
+              onChange={(dueDate) =>
+                setRows((all) => all.map((x, j) => (j === i ? { ...x, dueDate } : x)))
               }
             />
             <label className="emi-amount">

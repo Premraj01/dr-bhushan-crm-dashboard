@@ -31,6 +31,7 @@ import {
 import { AppointmentDialog, type SessionToBook } from "./book-appointment-dialog";
 import { CheckInTick } from "./check-in-tick";
 import { PendingBookingsQueue } from "./pending-bookings";
+import { SelectInput } from "@/components/form/select-input";
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 
@@ -377,7 +378,7 @@ export function AppointmentsView({
                 </p>
                 {awaitingSurgery.length > 0 && pickedPackage && (
                   <div className="day-surgery-controls">
-                    <select
+                    <SelectInput
                       aria-label="Patient awaiting surgery"
                       value={pickedPackage.packageId}
                       onChange={(e) => setSurgeryPick(e.target.value)}
@@ -387,7 +388,7 @@ export function AppointmentsView({
                           {p.patientName} · {p.packageId} · {p.surgery}
                         </option>
                       ))}
-                    </select>
+                    </SelectInput>
                     <Button
                       onClick={() =>
                         onStartScheduling({

@@ -1,4 +1,5 @@
 import { DURATIONS, durationLabel, FREQUENCIES, type RxDraft } from "./prescription-options";
+import { SelectInput } from "@/components/form/select-input";
 
 /** Dose, frequency, duration and instructions for one prescribed medicine. */
 export function RxFields({
@@ -39,7 +40,10 @@ export function RxFields({
       </label>
       <label>
         Duration
-        <select value={value.duration} onChange={(e) => onChange({ duration: e.target.value })}>
+        <SelectInput
+          value={value.duration}
+          onChange={(e) => onChange({ duration: e.target.value })}
+        >
           <option value="">Ongoing</option>
           {DURATIONS.map((d) => (
             <option key={d} value={String(d)}>
@@ -49,7 +53,7 @@ export function RxFields({
           {custom && (
             <option value={value.duration}>{durationLabel(Number(value.duration))}</option>
           )}
-        </select>
+        </SelectInput>
       </label>
       <label className="rx-instructions">
         Instructions

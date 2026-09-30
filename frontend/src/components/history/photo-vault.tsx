@@ -28,6 +28,9 @@ import {
 import { errorText } from "@/lib/api";
 import { longDate } from "./format";
 import { ConfirmDialog } from "./shared";
+import { DateInput } from "@/components/form/date-input";
+import { ValidatedForm } from "@/components/form/validated-form";
+import { SelectInput } from "@/components/form/select-input";
 
 const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp";
 
@@ -146,7 +149,7 @@ export function PhotoVault({
         <>
           <label className="vault-filter">
             Angle
-            <select
+            <SelectInput
               value={angleFilter}
               onChange={(e) => setAngleFilter(e.target.value as PhotoAngle | "")}
             >
@@ -154,7 +157,7 @@ export function PhotoVault({
               {PHOTO_ANGLES.map((a) => (
                 <option key={a}>{a}</option>
               ))}
-            </select>
+            </SelectInput>
           </label>
           {byMilestone.length === 0 && (
             <p className="history-empty">No photos from this angle yet.</p>
@@ -272,27 +275,27 @@ function PhotoUpload({
   const busy = progress !== null && progress.failed === null;
 
   return (
-    <form className="photo-upload" onSubmit={submit}>
+    <ValidatedForm className="photo-upload" onSubmit={submit}>
       <div className="form-grid three">
         <label>
           Milestone
-          <select
+          <SelectInput
             value={milestone}
             onChange={(e) => setMilestone(e.target.value as PhotoMilestone)}
           >
             {PHOTO_MILESTONES.map((m) => (
               <option key={m}>{m}</option>
             ))}
-          </select>
+          </SelectInput>
         </label>
         <label>
           Taken on
-          <input
-            type="date"
+          <DateInput
             required
             max={clinicToday()}
+            data-error-max="Photos can’t be dated in the future"
             value={takenOn}
-            onChange={(e) => setTakenOn(e.target.value)}
+            onChange={setTakenOn}
           />
         </label>
         <label>
@@ -333,7 +336,7 @@ function PhotoUpload({
           {staged.map((s, i) => (
             <div key={s.preview} className="staged-card">
               <img src={s.preview} alt="" />
-              <select
+              <SelectInput
                 aria-label={`Angle for ${s.file.name}`}
                 value={s.angle}
                 disabled={busy}
@@ -348,7 +351,7 @@ function PhotoUpload({
                 {PHOTO_ANGLES.map((a) => (
                   <option key={a}>{a}</option>
                 ))}
-              </select>
+              </SelectInput>
               <button
                 type="button"
                 aria-label={`Remove ${s.file.name}`}
@@ -378,7 +381,7 @@ function PhotoUpload({
           )}
         </Button>
       </div>
-    </form>
+    </ValidatedForm>
   );
 }
 
@@ -415,7 +418,7 @@ function PhotoCompare({
       <div className="form-grid three">
         <label>
           Angle
-          <select
+          <SelectInput
             value={angle}
             onChange={(e) => {
               setAngle(e.target.value as PhotoAngle);
@@ -426,19 +429,19 @@ function PhotoCompare({
             {angles.map((a) => (
               <option key={a}>{a}</option>
             ))}
-          </select>
+          </SelectInput>
         </label>
         <label>
           Before
-          <select value={before?.id ?? ""} onChange={(e) => setBeforeId(e.target.value)}>
+          <SelectInput value={before?.id ?? ""} onChange={(e) => setBeforeId(e.target.value)}>
             {options}
-          </select>
+          </SelectInput>
         </label>
         <label>
           After
-          <select value={after?.id ?? ""} onChange={(e) => setAfterId(e.target.value)}>
+          <SelectInput value={after?.id ?? ""} onChange={(e) => setAfterId(e.target.value)}>
             {options}
-          </select>
+          </SelectInput>
         </label>
       </div>
       {ofAngle.length < 2 && (

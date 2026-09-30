@@ -27,6 +27,8 @@ import {
 import { EmiPlanner, EmiSchedule } from "./emi-plan";
 import { InvoiceActions } from "./invoice-actions";
 import { inrPrice } from "@/components/inventory/inventory-api";
+import { ValidatedForm } from "@/components/form/validated-form";
+import { SelectInput } from "@/components/form/select-input";
 
 const STATUS_TONE: Record<AppointmentBill["status"], Tone> = {
   Paid: "success",
@@ -337,7 +339,7 @@ function AddPayment({
         : null;
 
   return (
-    <form className="add-payment" onSubmit={submit} noValidate>
+    <ValidatedForm className="add-payment" onSubmit={submit}>
       <h4 className="billing-heading">
         Add payment
         {nextEmi && (
@@ -375,6 +377,7 @@ function AddPayment({
             inputMode="numeric"
             min={1}
             max={due || undefined}
+            data-error-max={`That’s more than the balance of ${inr.format(due)}`}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             aria-invalid={tooMuch}
@@ -382,11 +385,11 @@ function AddPayment({
         </label>
         <label>
           Payment method
-          <select value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}>
+          <SelectInput value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}>
             {PAYMENT_METHODS.map((m) => (
               <option key={m}>{m}</option>
             ))}
-          </select>
+          </SelectInput>
         </label>
         <label className="full">
           Reference
@@ -407,7 +410,6 @@ function AddPayment({
           />
         </label>
       </div>
-      {tooMuch && <p className="field-hint">That’s more than the balance of {inr.format(due)}.</p>}
       {error && <Banner tone="error">{error}</Banner>}
       <div className="add-payment-actions">
         {!bill.needsCharge && value !== bill.balance && (
@@ -433,6 +435,6 @@ function AddPayment({
           )}
         </Button>
       </div>
-    </form>
+    </ValidatedForm>
   );
 }

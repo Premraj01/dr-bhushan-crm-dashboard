@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState, type ComponentType, type ReactNode, useCallback } from "react";
+import { useEffect, useMemo, useState, type ComponentType, type FormEvent, type ReactNode, useCallback } from "react";
+import { PhoneInput } from "@/components/form/phone-input";
+import { ValidatedForm } from "@/components/form/validated-form";
 import {
   Activity, AlertTriangle, BarChart3, Bell, BellRing, CalendarDays, Check, ChevronDown,
   ChevronRight, CircleDollarSign, RefreshCw, ClipboardList, ClipboardPlus, Clock3, CreditCard, FileText,
@@ -208,9 +210,9 @@ function SettingsView({ onInvite, onNotice, onOpenAppointments, isAdmin }: { onI
 }
 
 function ActionModal({ open, onOpenChange, kind, onSuccess }: { open: boolean; onOpenChange: (v:boolean)=>void; kind: string; onSuccess: (message:string)=>void }) {
-  const [saving,setSaving]=useState(false);
-  const submit=()=>{setSaving(true);setTimeout(()=>{setSaving(false);onOpenChange(false);onSuccess(`${kind} saved successfully.`)},700)};
-  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent><DialogHeader><DialogTitle>{kind}</DialogTitle><DialogDescription>Add the key details now. You can update the complete clinical record later.</DialogDescription></DialogHeader><div className="form-grid"><label>Patient name<input placeholder="Enter full name" /></label><label>Mobile number<input placeholder="+91" /></label><label className="full">Notes<textarea placeholder="Add clinical or follow-up notes" /></label></div><DialogFooter><Button variant="outline" onClick={()=>onOpenChange(false)}>Cancel</Button><Button onClick={submit} disabled={saving}>{saving?<><LoaderCircle className="animate-spin"/>Saving…</>:<>Save details</>}</Button></DialogFooter></DialogContent></Dialog>;
+  const [saving,setSaving]=useState(false); const [phone,setPhone]=useState("");
+  const submit=(e:FormEvent)=>{e.preventDefault();setSaving(true);setTimeout(()=>{setSaving(false);setPhone("");onOpenChange(false);onSuccess(`${kind} saved successfully.`)},700)};
+  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent><DialogHeader><DialogTitle>{kind}</DialogTitle><DialogDescription>Add the key details now. You can update the complete clinical record later.</DialogDescription></DialogHeader><ValidatedForm onSubmit={submit}><div className="form-grid"><label>Patient name<input required maxLength={120} placeholder="Enter full name" /></label><label>Mobile number<PhoneInput required value={phone} onChange={setPhone} /></label><label className="full">Notes<textarea placeholder="Add clinical or follow-up notes" /></label></div><DialogFooter className="mt-6"><Button type="button" variant="outline" onClick={()=>onOpenChange(false)}>Cancel</Button><Button type="submit" disabled={saving}>{saving?<><LoaderCircle className="animate-spin"/>Saving…</>:<>Save details</>}</Button></DialogFooter></ValidatedForm></DialogContent></Dialog>;
 }
 
 

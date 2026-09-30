@@ -17,8 +17,12 @@ import {
   type PatientDocument,
 } from "./history-api";
 import { errorText } from "@/lib/api";
+import { DateInput } from "@/components/form/date-input";
+import { TimeInput } from "@/components/form/time-input";
+import { ValidatedForm } from "@/components/form/validated-form";
 import { dateTime, fileSize } from "./format";
 import { ConfirmDialog } from "./shared";
+import { SelectInput } from "@/components/form/select-input";
 
 const DEFAULT_TITLE: Record<DocumentKind, string> = {
   "Surgery consent": "Informed consent — hair transplant surgery",
@@ -27,7 +31,7 @@ const DEFAULT_TITLE: Record<DocumentKind, string> = {
   Other: "",
 };
 
-/** Now, as the value of a datetime-local input. */
+/** Now, as local YYYY-MM-DDTHH:mm. */
 function nowLocal(): string {
   const d = new Date();
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -252,6 +256,8 @@ function DocumentUpload({
   const [kind, setKind] = useState<DocumentKind>("Surgery consent");
   const [title, setTitle] = useState(DEFAULT_TITLE["Surgery consent"]);
   const [signedAt, setSignedAt] = useState(nowLocal());
+  const [signedDate = "", signedTime = ""] = signedAt.split("T");
+  const [today, timeNow] = nowLocal().split("T") as [string, string];
   const [format, setFormat] = useState<PatientDocument["format"]>("Physical (scanned)");
   const [photoUse, setPhotoUse] = useState<PatientDocument["photoUse"]>();
   const [notes, setNotes] = useState("");
@@ -276,12 +282,12 @@ function DocumentUpload({
   };
 
   return (
-    <form className="photo-upload" onSubmit={submit}>
+    <ValidatedForm className="photo-upload" onSubmit={submit}>
       <fieldset className="form-lock" disabled={upload.isPending}>
         <div className="form-grid">
           <label>
             Document
-            <select
+            <SelectInput
               value={kind}
               onChange={(e) => {
                 const next = e.target.value as DocumentKind;
@@ -293,7 +299,7 @@ function DocumentUpload({
               {DOCUMENT_KINDS.map((k) => (
                 <option key={k}>{k}</option>
               ))}
-            </select>
+            </SelectInput>
           </label>
           <label>
             Title
@@ -306,29 +312,38 @@ function DocumentUpload({
           </label>
           <label>
             Signed on
-            <input
-              type="datetime-local"
+            <DateInput
               required
-              max={nowLocal()}
-              value={signedAt}
-              onChange={(e) => setSignedAt(e.target.value)}
+              max={today}
+              data-error-max="The signing date can’t be in the future"
+              value={signedDate}
+              onChange={(d) => setSignedAt(`${d}T${signedTime}`)}
+            />
+          </label>
+          <label>
+            Signed at
+            <TimeInput
+              required
+              {...(signedDate === today && { max: timeNow })}
+              value={signedTime}
+              onChange={(t) => setSignedAt(`${signedDate}T${t}`)}
             />
           </label>
           <label>
             Format
-            <select
+            <SelectInput
               value={format}
               onChange={(e) => setFormat(e.target.value as PatientDocument["format"])}
             >
               {DOCUMENT_FORMATS.map((f) => (
                 <option key={f}>{f}</option>
               ))}
-            </select>
+            </SelectInput>
           </label>
           {kind === "Photo consent" && (
             <label className="full">
               Anonymised photos may be used for
-              <select
+              <SelectInput
                 required
                 value={photoUse ?? ""}
                 onChange={(e) =>
@@ -339,7 +354,7 @@ function DocumentUpload({
                 {PHOTO_USES.map((u) => (
                   <option key={u}>{u}</option>
                 ))}
-              </select>
+              </SelectInput>
             </label>
           )}
           {kind === "Surgery consent" && (
@@ -391,6 +406,6 @@ function DocumentUpload({
           )}
         </Button>
       </div>
-    </form>
+    </ValidatedForm>
   );
 }

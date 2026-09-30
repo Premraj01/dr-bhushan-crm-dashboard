@@ -18,6 +18,8 @@ import {
   type ClinicChange,
 } from "./affected-appointments";
 import { AffectedAppointmentsDialog } from "./affected-appointments-dialog";
+import { DateInput } from "@/components/form/date-input";
+import { TimeInput } from "@/components/form/time-input";
 
 /** "2026-10-02" → "2 Oct 2026". */
 function formatDate(value: string) {
@@ -175,21 +177,23 @@ export function ClinicTimingsSettings({
               />
               <label>
                 <span>Opens</span>
-                <input
-                  type="time"
+                <TimeInput
+                  stepMinutes={15}
+                  aria-label={`${item.day} opening time`}
                   value={item.opensAt}
                   disabled={!item.open}
-                  onChange={(event) => updateDay(index, { opensAt: event.target.value })}
+                  onChange={(opensAt) => opensAt && updateDay(index, { opensAt })}
                 />
               </label>
               <span className="clinic-time-separator">to</span>
               <label>
                 <span>Closes</span>
-                <input
-                  type="time"
+                <TimeInput
+                  stepMinutes={15}
+                  aria-label={`${item.day} closing time`}
                   value={item.closesAt}
                   disabled={!item.open}
-                  onChange={(event) => updateDay(index, { closesAt: event.target.value })}
+                  onChange={(closesAt) => closesAt && updateDay(index, { closesAt })}
                 />
               </label>
               <span className="clinic-day-summary">
@@ -210,19 +214,14 @@ export function ClinicTimingsSettings({
           <div className="clinic-closure-form">
             <label>
               <span>From</span>
-              <input
-                type="date"
-                value={draft.from}
-                onChange={(event) => setDraft({ ...draft, from: event.target.value })}
-              />
+              <DateInput value={draft.from} onChange={(from) => setDraft({ ...draft, from })} />
             </label>
             <label>
               <span>To</span>
-              <input
-                type="date"
+              <DateInput
                 value={draft.to}
                 min={draft.from || undefined}
-                onChange={(event) => setDraft({ ...draft, to: event.target.value })}
+                onChange={(to) => setDraft({ ...draft, to })}
               />
             </label>
             <label className="clinic-closure-reason">

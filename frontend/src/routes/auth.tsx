@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { demoSignIn, isAuthed, mockSignIn, ROLE_LABELS, type Role } from "@/lib/mock-auth";
 import logoMark from "@/assets/logo-mark.png";
 import doodle from "@/assets/auth-doodle.jpg";
+import { ValidatedForm } from "@/components/form/validated-form";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -83,7 +84,7 @@ function AuthPage() {
           <h1>{mode === "signin" ? "Welcome back" : "Join the clinic workspace"}</h1>
           <p className="auth-sub">{mode === "signin" ? "Sign in to manage patients, appointments and treatments." : "Create your account to start managing the clinic."}</p>
 
-          <form onSubmit={submit} className="auth-form">
+          <ValidatedForm onSubmit={submit} className="auth-form">
             {mode === "register" && (
               <label className="auth-field">
                 <span>Full name</span>
@@ -102,7 +103,7 @@ function AuthPage() {
             <Button size="lg" type="submit" disabled={submitting} className="auth-submit">
               {submitting ? "Signing you in…" : mode === "signin" ? "Sign in" : "Create account"}
             </Button>
-          </form>
+          </ValidatedForm>
 
           {mode === "signin" && (
             <>

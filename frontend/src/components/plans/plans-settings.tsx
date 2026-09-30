@@ -41,6 +41,7 @@ import {
   type PlanItem,
   type TreatmentPlan,
 } from "./plans-api";
+import { ValidatedForm } from "@/components/form/validated-form";
 
 const errorText = (error: unknown) =>
   error instanceof ApiError
@@ -217,7 +218,7 @@ function PlanForm({
   };
 
   return (
-    <form onSubmit={submit} className="plan-form">
+    <ValidatedForm onSubmit={submit} className="plan-form">
       <DialogHeader>
         <DialogTitle>{plan ? "Edit treatment plan" : "New treatment plan"}</DialogTitle>
         <DialogDescription>
@@ -280,6 +281,6 @@ function PlanForm({
           {plan ? "Save plan" : "Create plan"}
         </Button>
       </DialogFooter>
-    </form>
+    </ValidatedForm>
   );
 }

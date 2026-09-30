@@ -16,6 +16,7 @@ import {
   type PlanStep,
   type Quote,
 } from "./plans-api";
+import { SelectInput } from "@/components/form/select-input";
 
 const GAP_UNITS: GapUnit[] = ["days", "weeks", "months"];
 const QUICK_GAPS: Gap[] = [
@@ -280,7 +281,7 @@ function StepEditor({
             onChange={(e) => setGap({ ...gap, value: Math.max(0, Number(e.target.value) || 0) })}
             aria-label="Gap"
           />
-          <select
+          <SelectInput
             value={gap.unit}
             onChange={(e) => setGap({ ...gap, unit: e.target.value as GapUnit })}
             aria-label="Gap unit"
@@ -288,7 +289,7 @@ function StepEditor({
             {GAP_UNITS.map((u) => (
               <option key={u}>{u}</option>
             ))}
-          </select>
+          </SelectInput>
           <span>{gapLabel}</span>
           <span className="plan-gap-quick" aria-label="Quick gaps">
             {QUICK_GAPS.map((g) => (
@@ -305,7 +306,7 @@ function StepEditor({
         </div>
       )}
       <div className={cn("plan-step-main", pricing && "pricing")}>
-        <select
+        <SelectInput
           value={step.treatmentId}
           onChange={(e) => {
             const next = treatments.find((t) => t.id === e.target.value);
@@ -325,7 +326,7 @@ function StepEditor({
               {t.name}
             </option>
           ))}
-        </select>
+        </SelectInput>
         {/* Settings only: the package builder doesn't mark surgical treatments. */}
         {!pricing && treatment?.surgical && <SurgicalTag />}
         {pricing && graft && (

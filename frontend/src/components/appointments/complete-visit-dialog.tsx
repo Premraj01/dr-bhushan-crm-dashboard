@@ -27,6 +27,7 @@ import {
 import { errorText } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAppointmentStatus, type Appointment } from "./appointments-api";
+import { ValidatedForm } from "@/components/form/validated-form";
 
 /**
  * One prescribed medicine. `item` is set for products the clinic stocks; `give` is how
@@ -150,7 +151,7 @@ function CompleteVisitForm({
   };
 
   return (
-    <form onSubmit={submit}>
+    <ValidatedForm onSubmit={submit}>
       <DialogHeader>
         <DialogTitle>Complete visit & prescribe</DialogTitle>
         <DialogDescription>
@@ -362,6 +363,6 @@ function CompleteVisitForm({
             : "Complete visit"}
         </Button>
       </DialogFooter>
-    </form>
+    </ValidatedForm>
   );
 }

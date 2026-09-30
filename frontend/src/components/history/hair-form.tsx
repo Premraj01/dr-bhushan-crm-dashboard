@@ -16,6 +16,8 @@ import {
 } from "./history-api";
 import { clean, type Patch } from "./format";
 import { FormSection, QuickPicks, Rows, SaveBar } from "./shared";
+import { ValidatedForm } from "@/components/form/validated-form";
+import { SelectInput } from "@/components/form/select-input";
 
 /** Norwood grades drawn by the existing hair-loss chart (sub-types share their stage). */
 const NORWOOD_PICTURE: Record<string, ConcernIllustration> = {
@@ -95,7 +97,7 @@ export function HairForm({
   };
 
   return (
-    <form onSubmit={submit} className="history-form">
+    <ValidatedForm onSubmit={submit} className="history-form">
       <fieldset className="form-lock" disabled={!canEdit || save.isPending}>
         <FormSection
           title="Hair loss classification"
@@ -105,7 +107,7 @@ export function HairForm({
             <div className="form-grid">
               <label>
                 Scale
-                <select
+                <SelectInput
                   value={form.scale}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, scale: e.target.value as HairScale, grade: "" }))
@@ -113,11 +115,11 @@ export function HairForm({
                 >
                   <option>Norwood</option>
                   <option>Ludwig</option>
-                </select>
+                </SelectInput>
               </label>
               <label>
                 Grade
-                <select
+                <SelectInput
                   required
                   value={form.grade}
                   onChange={(e) => setForm((f) => ({ ...f, grade: e.target.value }))}
@@ -128,7 +130,7 @@ export function HairForm({
                       {form.scale} {g}
                     </option>
                   ))}
-                </select>
+                </SelectInput>
               </label>
               {form.scale === "Ludwig" && form.grade && (
                 <p className="full field-note">{LUDWIG_TEXT[form.grade]}</p>
@@ -145,7 +147,7 @@ export function HairForm({
           <div className="form-grid three">
             <label>
               Quality
-              <select
+              <SelectInput
                 value={form.donor.quality ?? ""}
                 onChange={(e) =>
                   setDonor({
@@ -157,7 +159,7 @@ export function HairForm({
                 {DONOR_QUALITIES.map((q) => (
                   <option key={q}>{q}</option>
                 ))}
-              </select>
+              </SelectInput>
             </label>
             <label>
               Density (FU / cm²)
@@ -173,7 +175,7 @@ export function HairForm({
             </label>
             <label>
               Scalp laxity
-              <select
+              <SelectInput
                 value={form.donor.laxity ?? ""}
                 onChange={(e) =>
                   setDonor({
@@ -185,7 +187,7 @@ export function HairForm({
                 {DONOR_LAXITIES.map((l) => (
                   <option key={l}>{l}</option>
                 ))}
-              </select>
+              </SelectInput>
             </label>
             <label className="full">
               Donor notes
@@ -305,6 +307,6 @@ export function HairForm({
         edited={hair}
         readOnlyNote="Only doctors and admins can edit the hair assessment."
       />
-    </form>
+    </ValidatedForm>
   );
 }

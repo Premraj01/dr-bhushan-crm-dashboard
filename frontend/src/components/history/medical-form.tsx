@@ -18,6 +18,8 @@ import {
 import { clean } from "./format";
 import { dosing } from "./prescription-options";
 import { FormSection, QuickPicks, Rows, SaveBar } from "./shared";
+import { ValidatedForm } from "@/components/form/validated-form";
+import { SelectInput } from "@/components/form/select-input";
 
 const EMPTY: MedicalHistory = {
   noKnownAllergies: false,
@@ -81,7 +83,7 @@ export function MedicalForm({
   };
 
   return (
-    <form onSubmit={submit} className="history-form">
+    <ValidatedForm onSubmit={submit} className="history-form">
       <fieldset className="form-lock" disabled={!canEdit || save.isPending}>
         <FormSection
           title="Allergies"
@@ -126,7 +128,7 @@ export function MedicalForm({
                     </label>
                     <label>
                       Severity
-                      <select
+                      <SelectInput
                         value={a.severity ?? ""}
                         onChange={(e) =>
                           update({ severity: (e.target.value || undefined) as Allergy["severity"] })
@@ -136,7 +138,7 @@ export function MedicalForm({
                         {SEVERITIES.map((s) => (
                           <option key={s}>{s}</option>
                         ))}
-                      </select>
+                      </SelectInput>
                     </label>
                   </>
                 )}
@@ -179,13 +181,13 @@ export function MedicalForm({
                 </label>
                 <label>
                   Status
-                  <select
+                  <SelectInput
                     value={c.status}
                     onChange={(e) => update({ status: e.target.value as Condition["status"] })}
                   >
                     <option>Current</option>
                     <option>Past</option>
-                  </select>
+                  </SelectInput>
                 </label>
                 <label>
                   Notes
@@ -345,14 +347,14 @@ export function MedicalForm({
           <div className="form-grid">
             <label>
               Clearance
-              <select
+              <SelectInput
                 value={form.clearance}
                 onChange={(e) => set("clearance", e.target.value as MedicalHistory["clearance"])}
               >
                 {CLEARANCE_STATUSES.map((s) => (
                   <option key={s}>{s}</option>
                 ))}
-              </select>
+              </SelectInput>
             </label>
             <label className="full">
               Clearance notes
@@ -382,6 +384,6 @@ export function MedicalForm({
         edited={medical}
         readOnlyNote="Only doctors and admins can edit the medical history."
       />
-    </form>
+    </ValidatedForm>
   );
 }

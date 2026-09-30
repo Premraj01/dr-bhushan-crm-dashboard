@@ -54,6 +54,11 @@ import {
 } from "@/lib/clinic-timings";
 import { getSessionUser, initials } from "@/lib/mock-auth";
 import { cn } from "@/lib/utils";
+import { isValidMobile, phoneDigits } from "@/lib/validation";
+import { DateInput } from "@/components/form/date-input";
+import { PhoneInput } from "@/components/form/phone-input";
+import { TimeInput } from "@/components/form/time-input";
+import { ValidatedForm } from "@/components/form/validated-form";
 import {
   isOpen,
   useAppointmentStatus,
@@ -66,12 +71,19 @@ import { BillingSection } from "./billing-section";
 import { CompleteVisitDialog } from "./complete-visit-dialog";
 import { dosing } from "@/components/history/prescription-options";
 import { inrPrice } from "@/components/inventory/inventory-api";
+import { SelectInput } from "@/components/form/select-input";
 
 /** "current" keeps the appointment's patient as-is when editing (including walk-ins with no record). */
 type PatientChoice =
   { kind: "current" } | { kind: "existing"; patient: Patient } | { kind: "new" } | null;
 
-const PHONE = /^\+?[0-9][0-9 -]{6,19}$/;
+const validPhone = (phone: string) => isValidMobile(phoneDigits(phone));
+/** The last minute before closing, so the picker never offers the closing time itself. */
+const beforeClosing = (hhmm: string) => {
+  const [h, m] = hhmm.split(":").map(Number) as [number, number];
+  const t = h * 60 + m - 1;
+  return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+};
 /** Same number regardless of spaces, dashes or a +91 prefix (matches the backend). */
 const phoneKey = (phone: string) => phone.replace(/\D/g, "").slice(-10);
 
@@ -416,7 +428,7 @@ function AppointmentForm({
     },
   });
 
-  const newPatientValid = newName.trim().length > 0 && PHONE.test(newPhone.trim());
+  const newPatientValid = newName.trim().length > 0 && validPhone(newPhone);
   const patientReady =
     choice?.kind === "current" ||
     choice?.kind === "existing" ||
@@ -484,7 +496,7 @@ function AppointmentForm({
   );
 
   return (
-    <form onSubmit={submit} noValidate>
+    <ValidatedForm onSubmit={submit}>
       {editing && appointment && (
         <div className="status-flow" aria-label="Appointment status">
           <ol>
@@ -727,13 +739,11 @@ function AppointmentForm({
                 </label>
                 <label>
                   Mobile number
-                  <input
+                  <PhoneInput
                     required
-                    inputMode="tel"
                     value={newPhone}
-                    onChange={(e) => setNewPhone(e.target.value)}
-                    placeholder="+91 98xxx xxxxx"
-                    aria-invalid={touched && !PHONE.test(newPhone.trim())}
+                    onChange={setNewPhone}
+                    aria-invalid={touched && !validPhone(newPhone)}
                   />
                 </label>
               </div>
@@ -767,27 +777,27 @@ function AppointmentForm({
 
           <label>
             Date
-            <input
+            <DateInput
               required
-              type="date"
               // Past dates stay allowed when editing, e.g. to mark an old visit Completed.
               {...(!editing && { min: clinicToday() })}
+              data-error-min="Appointments can’t be booked in the past"
               disabled={locked}
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={setDate}
             />
           </label>
           <label>
             Time
-            <input
+            <TimeInput
               required
-              type="time"
-              step={900}
-              {...(checkTime && dayHours && { min: dayHours.opensAt, max: dayHours.closesAt })}
+              stepMinutes={15}
+              {...(checkTime &&
+                dayHours && { min: dayHours.opensAt, max: beforeClosing(dayHours.closesAt) })}
               aria-invalid={!!hoursError}
               disabled={locked}
               value={time}
-              onChange={(e) => setTime(e.target.value)}
+              onChange={setTime}
             />
           </label>
           {hoursError && <p className="full field-error">{hoursError}</p>}
@@ -803,7 +813,7 @@ function AppointmentForm({
           )}
           <label>
             Treatment
-            <select
+            <SelectInput
               value={treatmentName}
               disabled={!!session}
               onChange={(e) => setTreatmentName(e.target.value)}
@@ -811,28 +821,28 @@ function AppointmentForm({
               {[...new Set([treatmentName, ...activeTreatments.map((t) => t.name)])].map((n) => (
                 <option key={n}>{n}</option>
               ))}
-            </select>
+            </SelectInput>
             {prpHint && <small className="treatment-hint">{prpHint}</small>}
           </label>
           <label>
             Doctor
-            <select value={chosenDoctor} onChange={(e) => setDoctor(e.target.value)}>
+            <SelectInput value={chosenDoctor} onChange={(e) => setDoctor(e.target.value)}>
               {doctorOptions.map((n) => (
                 <option key={n}>{n}</option>
               ))}
-            </select>
+            </SelectInput>
           </label>
           {isSurgery && (
             <label>
               Surgery length
-              <select value={days} onChange={(e) => setDays(Number(e.target.value))}>
+              <SelectInput value={days} onChange={(e) => setDays(Number(e.target.value))}>
                 {Array.from({ length: maxDays }, (_, i) => i + 1).map((d) => (
                   <option key={d} value={d}>
                     {d} day{d > 1 ? "s" : ""}
                     {date && d > 1 ? ` (until ${untilLabel(date, d)})` : ""}
                   </option>
                 ))}
-              </select>
+              </SelectInput>
             </label>
           )}
           <label className="full">
@@ -896,7 +906,7 @@ function AppointmentForm({
           </Button>
         )}
       </DialogFooter>
-    </form>
+    </ValidatedForm>
   );
 }
 

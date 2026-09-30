@@ -49,6 +49,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { api, ApiError, getToken } from "@/lib/api";
 import { useSocketEvent } from "@/lib/socket";
+import { ValidatedForm } from "@/components/form/validated-form";
+import { SelectInput } from "@/components/form/select-input";
 
 export const TREATMENT_CATEGORIES = ["PRP", "Transplant", "Consultation", "Scalp therapy"] as const;
 export type TreatmentCategory = (typeof TREATMENT_CATEGORIES)[number];
@@ -624,18 +626,24 @@ function TreatmentForm({ item, onDone, onCancel }: FormProps<TreatmentOption>) {
       </label>
       <label>
         Category
-        <select value={category} onChange={(e) => setCategory(e.target.value as TreatmentCategory)}>
+        <SelectInput
+          value={category}
+          onChange={(e) => setCategory(e.target.value as TreatmentCategory)}
+        >
           {TREATMENT_CATEGORIES.map((c) => (
             <option key={c}>{c}</option>
           ))}
-        </select>
+        </SelectInput>
       </label>
       <label>
         Priced per
-        <select value={pricingUnit} onChange={(e) => setPricingUnit(e.target.value as PricingUnit)}>
+        <SelectInput
+          value={pricingUnit}
+          onChange={(e) => setPricingUnit(e.target.value as PricingUnit)}
+        >
           <option value="session">Session</option>
           <option value="graft">Graft (FUE)</option>
-        </select>
+        </SelectInput>
       </label>
       <label>
         {pricingUnit === "graft" ? "Price per graft (₹)" : "Price per session (₹)"}
@@ -693,14 +701,14 @@ function TreatmentForm({ item, onDone, onCancel }: FormProps<TreatmentOption>) {
         </label>
         <label>
           Unit
-          <select
+          <SelectInput
             value={durationUnit}
             onChange={(e) => setDurationUnit(e.target.value as DurationUnit)}
           >
             <option value="minutes">Minutes</option>
             <option value="hours">Hours</option>
             <option value="days">Days</option>
-          </select>
+          </SelectInput>
         </label>
         {rangeInvalid && <p className="field-hint">“Up to” must be more than “From”.</p>}
       </fieldset>
@@ -790,7 +798,7 @@ function ConcernForm({ item, onDone, onCancel }: FormProps<ConcernOption>) {
       <div className="full illustration-field">
         <label>
           Illustration
-          <select
+          <SelectInput
             value={illustration}
             onChange={(e) => setIllustration(e.target.value as ConcernIllustration | "")}
           >
@@ -800,7 +808,7 @@ function ConcernForm({ item, onDone, onCancel }: FormProps<ConcernOption>) {
                 {ILLUSTRATION_LABELS[kind]}
               </option>
             ))}
-          </select>
+          </SelectInput>
         </label>
         <div className="illustration-preview" aria-hidden={!illustration}>
           {illustration ? <HairLossIllustration kind={illustration} /> : <span>No drawing</span>}
@@ -855,7 +863,7 @@ function CatalogFormShell({
   }, [error, errorEl]);
 
   return (
-    <form onSubmit={onSubmit}>
+    <ValidatedForm onSubmit={onSubmit}>
       <DialogHeader>
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription>{description}</DialogDescription>
@@ -881,6 +889,6 @@ function CatalogFormShell({
           )}
         </Button>
       </DialogFooter>
-    </form>
+    </ValidatedForm>
   );
 }

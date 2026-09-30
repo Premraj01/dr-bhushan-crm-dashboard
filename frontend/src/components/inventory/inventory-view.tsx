@@ -58,6 +58,9 @@ import {
   type InventoryItem,
   type ProductType,
 } from "./inventory-api";
+import { DateInput } from "@/components/form/date-input";
+import { ValidatedForm } from "@/components/form/validated-form";
+import { SelectInput } from "@/components/form/select-input";
 
 type Filter = "all" | "attention" | "low" | "out" | "soon" | "expired";
 const FILTERS: { value: Filter; label: string }[] = [
@@ -313,7 +316,7 @@ export function InventoryView({
             aria-label="Search inventory"
           />
         </label>
-        <select
+        <SelectInput
           className="toolbar-select"
           value={type}
           onChange={(e) => setType(e.target.value as ProductType | "")}
@@ -323,8 +326,8 @@ export function InventoryView({
           {PRODUCT_TYPES.map((t) => (
             <option key={t}>{t}</option>
           ))}
-        </select>
-        <select
+        </SelectInput>
+        <SelectInput
           className="toolbar-select"
           value={filter}
           onChange={(e) => setFilter(e.target.value as Filter)}
@@ -335,7 +338,7 @@ export function InventoryView({
               {f.label}
             </option>
           ))}
-        </select>
+        </SelectInput>
       </div>
       <section className="panel">
         <SectionHeader
@@ -641,7 +644,7 @@ function ProductForm({
   };
 
   return (
-    <form onSubmit={submit}>
+    <ValidatedForm onSubmit={submit}>
       <DialogHeader>
         <DialogTitle>{item ? "Edit product" : "Add product"}</DialogTitle>
         <DialogDescription>
@@ -664,7 +667,7 @@ function ProductForm({
             disabled={Boolean(item)}
             maxLength={64}
             pattern="[A-Za-z0-9][A-Za-z0-9._\-]*"
-            title="Letters, digits, dots, dashes or underscores"
+            data-error-pattern="Use letters, digits, dots, dashes or underscores only"
             value={itemId}
             onChange={(e) => setItemId(e.target.value)}
             placeholder="e.g. 8901234560011"
@@ -672,11 +675,11 @@ function ProductForm({
         </label>
         <label>
           Type
-          <select value={type} onChange={(e) => setType(e.target.value as ProductType)}>
+          <SelectInput value={type} onChange={(e) => setType(e.target.value as ProductType)}>
             {PRODUCT_TYPES.map((t) => (
               <option key={t}>{t}</option>
             ))}
-          </select>
+          </SelectInput>
         </label>
         <label className="full">
           Product name
@@ -763,12 +766,7 @@ function ProductForm({
         {belowCost && <p className="field-hint full">Selling price is below the cost price.</p>}
         <label>
           Expiry date
-          <input
-            required
-            type="date"
-            value={expiryDate}
-            onChange={(e) => setExpiryDate(e.target.value)}
-          />
+          <DateInput required value={expiryDate} onChange={setExpiryDate} />
         </label>
         <div className="product-image-field">
           <label>
@@ -776,7 +774,7 @@ function ProductForm({
             <input
               maxLength={500}
               pattern="(https?://\S+|/[\w\-.\/]+)"
-              title="An https:// link, or a path on this site such as /products/serum.svg"
+              data-error-pattern="Enter an https:// link, or a path on this site such as /products/serum.svg"
               value={imageUrl}
               onChange={(e) => setImageUrl(e.target.value)}
               placeholder="https://…"
@@ -802,7 +800,7 @@ function ProductForm({
           )}
         </Button>
       </DialogFooter>
-    </form>
+    </ValidatedForm>
   );
 }
 
@@ -840,7 +838,7 @@ function AdjustStockForm({
   };
 
   return (
-    <form onSubmit={submit}>
+    <ValidatedForm onSubmit={submit}>
       <DialogHeader>
         <DialogTitle>Adjust stock</DialogTitle>
         <DialogDescription>
@@ -918,6 +916,6 @@ function AdjustStockForm({
           )}
         </Button>
       </DialogFooter>
-    </form>
+    </ValidatedForm>
   );
 }

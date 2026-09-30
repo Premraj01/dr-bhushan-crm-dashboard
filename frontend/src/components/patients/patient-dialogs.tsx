@@ -30,6 +30,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { errorText } from "@/lib/api";
 import { initials } from "@/lib/mock-auth";
 import { cn } from "@/lib/utils";
+import { DateInput } from "@/components/form/date-input";
+import { PhoneInput } from "@/components/form/phone-input";
+import { ValidatedForm } from "@/components/form/validated-form";
 import {
   clinicToday,
   formatDay,
@@ -56,6 +59,7 @@ import {
   type StepView,
 } from "@/components/plans/plans-api";
 import { useDebounced } from "@/lib/use-debounced";
+import { SelectInput } from "@/components/form/select-input";
 
 export type EditTab = "details" | "package";
 
@@ -580,8 +584,6 @@ export function EditPatientDialog({
 
 /* ---------- details form (shared by add and edit) ---------- */
 
-const PHONE_PATTERN = "\\+?[0-9][0-9 \\-]{6,19}";
-
 type DetailsState = {
   firstName: string;
   middleName: string;
@@ -681,6 +683,8 @@ function PatientDetailsForm({
   const [form, setForm] = useState(() => initialDetails(patient));
   const set = (k: keyof DetailsState) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
+  const setValue = (k: keyof DetailsState) => (value: string) =>
+    setForm((f) => ({ ...f, [k]: value }));
   // Active concerns from Settings, keeping the patient's current value even if it's not in the list.
   const concernNames = [
     ...new Set(
@@ -696,7 +700,7 @@ function PatientDetailsForm({
       ? "Hair loss is staged on the Norwood scale."
       : form.gender === "Female"
         ? "Hair loss is staged on the Ludwig scale."
-        : "Used for hormonal evaluation and hair-loss staging (Norwood / Ludwig).";
+        : null;
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -704,7 +708,7 @@ function PatientDetailsForm({
   };
 
   return (
-    <form onSubmit={submit}>
+    <ValidatedForm onSubmit={submit}>
       {error != null && (
         <div className="mt-2">
           <Banner tone="error">{errorText(error)}</Banner>
@@ -732,21 +736,21 @@ function PatientDetailsForm({
         </label>
         <label>
           Gender
-          <select required={!patient} value={form.gender} onChange={set("gender")}>
+          <SelectInput required={!patient} value={form.gender} onChange={set("gender")}>
             <option value="">{patient ? "Not recorded" : "Select gender"}</option>
             {GENDERS.map((g) => (
               <option key={g}>{g}</option>
             ))}
-          </select>
+          </SelectInput>
         </label>
-        <p className="full field-note">{scale}</p>
+        {scale && <p className="full field-note">{scale}</p>}
         <label>
           Date of birth
-          <input
-            type="date"
+          <DateInput
             max={clinicToday()}
             value={form.dateOfBirth}
-            onChange={set("dateOfBirth")}
+            onChange={setValue("dateOfBirth")}
+            data-error-max="Date of birth can’t be in the future"
           />
         </label>
         <label>
@@ -768,19 +772,18 @@ function PatientDetailsForm({
         <h4 className="full form-section-title">Contact information</h4>
         <label>
           Mobile number
-          <input
-            required
-            type="tel"
-            pattern={PHONE_PATTERN}
-            title="A valid phone number, e.g. +91 98230 78142"
-            value={form.phone}
-            onChange={set("phone")}
-            placeholder="+91"
-          />
+          <PhoneInput required value={form.phone} onChange={setValue("phone")} />
         </label>
         <label>
           Email
-          <input type="email" value={form.email} onChange={set("email")} placeholder="Optional" />
+          <input
+            type="email"
+            inputMode="email"
+            maxLength={120}
+            value={form.email}
+            onChange={set("email")}
+            placeholder="Optional — name@example.com"
+          />
         </label>
         <p className="full field-note">
           The mobile number receives WhatsApp updates and appointment reminders.
@@ -829,26 +832,23 @@ function PatientDetailsForm({
         </label>
         <label>
           Contact phone
-          <input
+          <PhoneInput
             required={needsContact}
-            type="tel"
-            pattern={PHONE_PATTERN}
-            title="A valid phone number, e.g. +91 98230 78142"
             value={form.ecPhone}
-            onChange={set("ecPhone")}
-            placeholder="+91"
+            onChange={setValue("ecPhone")}
+            data-error-required="Add the contact’s mobile number, or clear the other contact fields"
           />
         </label>
 
         <h4 className="full form-section-title">Clinical</h4>
         <label>
           Primary concern
-          <select value={form.concern} onChange={set("concern")}>
+          <SelectInput value={form.concern} onChange={set("concern")}>
             {!patient?.concern && <option value="">Not recorded yet</option>}
             {concernNames.map((c) => (
               <option key={c}>{c}</option>
             ))}
-          </select>
+          </SelectInput>
         </label>
         <label className="full">
           Clinical notes
@@ -875,7 +875,7 @@ function PatientDetailsForm({
           )}
         </Button>
       </DialogFooter>
-    </form>
+    </ValidatedForm>
   );
 }
 
@@ -995,28 +995,23 @@ function PackageBuilder({
   const startsWithSurgery = quote.data?.steps.some((s) => s.surgery);
 
   return (
-    <form onSubmit={submit} className="package-builder plan-builder">
+    <ValidatedForm onSubmit={submit} className="package-builder plan-builder">
       <div className="package-options">
         <div className="form-grid">
           <label>
             Start from plan
-            <select value={planId} onChange={(e) => choosePlan(e.target.value)}>
+            <SelectInput value={planId} onChange={(e) => choosePlan(e.target.value)}>
               <option value="">Custom — build from scratch</option>
               {activePlans.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>
               ))}
-            </select>
+            </SelectInput>
           </label>
           <label>
             First visit due
-            <input
-              type="date"
-              required
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
+            <DateInput required value={startDate} onChange={setStartDate} />
           </label>
           {plan?.description && <p className="full field-note">{plan.description}</p>}
         </div>
@@ -1076,6 +1071,6 @@ function PackageBuilder({
           </Button>
         </div>
       </aside>
-    </form>
+    </ValidatedForm>
   );
 }

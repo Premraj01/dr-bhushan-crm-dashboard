@@ -21,6 +21,7 @@ import {
 } from "./prescription-options";
 import { RxFields } from "./rx-fields";
 import { ConfirmDialog } from "./shared";
+import { ValidatedForm } from "@/components/form/validated-form";
 
 function status(p: Prescription): { text: string; tone: "success" | "neutral" | "error" } {
   if (p.stoppedAt) return { text: `Stopped ${longDate(p.stoppedAt)}`, tone: "error" };
@@ -175,7 +176,7 @@ function NewPrescription({ patientId, onDone }: { patientId: string; onDone: () 
   };
 
   return (
-    <form className="photo-upload" onSubmit={submit}>
+    <ValidatedForm className="photo-upload" onSubmit={submit}>
       <fieldset className="form-lock" disabled={create.isPending}>
         <ul className="rx-rows">
           {rows.map((row, i) => (
@@ -251,6 +252,6 @@ function NewPrescription({ patientId, onDone }: { patientId: string; onDone: () 
           Save prescription
         </Button>
       </div>
-    </form>
+    </ValidatedForm>
   );
 }
