@@ -71,6 +71,35 @@ export class AppointmentsService
     }
   }
 
+  /**
+   * Each patient's next booked visit (Scheduled or Rescheduled, today or later), for
+   * the Patients cards. Visits already checked in today count as the current visit.
+   */
+  upcoming(): Pick<
+    Appointment,
+    'id' | 'patientId' | 'startsAt' | 'type' | 'doctor' | 'status'
+  >[] {
+    const today = clinicDate();
+    const next = new Map<string, Appointment>();
+    for (const a of this.findAll()) {
+      if (!a.patientId) continue;
+      if (a.status !== 'Scheduled' && a.status !== 'Rescheduled') continue;
+      if (clinicDate(a.startsAt) < today) continue;
+      const seen = next.get(a.patientId);
+      if (!seen || a.startsAt < seen.startsAt) next.set(a.patientId, a);
+    }
+    return [...next.values()].map(
+      ({ id, patientId, startsAt, type, doctor, status }) => ({
+        id,
+        patientId,
+        startsAt,
+        type,
+        doctor,
+        status,
+      }),
+    );
+  }
+
   list({
     date,
     month,

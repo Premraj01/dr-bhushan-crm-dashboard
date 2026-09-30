@@ -9,11 +9,13 @@ import {
   RefreshCw,
   Search,
   ShieldAlert,
+  type LucideIcon,
 } from "lucide-react";
 import { Banner, PageHeader, SectionHeader, StatusChip, type Tone } from "@/components/crm-ui";
 import { initials } from "@/lib/mock-auth";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { dateTime } from "./format";
 import { useHistoryOverview, type ConsentState, type HistorySummary } from "./history-api";
@@ -45,24 +47,83 @@ const CONSENT_TONE: Record<ConsentState, Tone> = {
   Missing: "neutral",
 };
 
-function SafetyCell({ r }: { r: HistorySummary }) {
-  if (!r.medicalRecorded) return <span className="text-muted-foreground">Not recorded</span>;
-  const flags = [
-    r.allergies.length > 0 && { icon: ShieldAlert, text: r.allergies.join(", ") },
-    r.bleedingRisk.length > 0 && { icon: Droplet, text: r.bleedingRisk.join(", ") },
-    r.infectious.length > 0 && { icon: AlertTriangle, text: r.infectious.join(", ") },
-    r.clearance === "Pending" && { icon: AlertTriangle, text: "Clearance pending" },
-  ].filter((x) => !!x);
-  if (flags.length === 0) return <StatusChip tone="success">No alerts</StatusChip>;
+type CellItem = { key: string; text: string; icon?: LucideIcon; tone?: Tone };
+
+/**
+ * One line: the first item, then "…+N" when there are more. Hover or focus shows
+ * every item in a tooltip.
+ */
+function OneLine({ items, label }: { items: CellItem[]; label: string }) {
+  const [first, ...rest] = items;
+  if (!first) return null;
+  const render = (item: CellItem) =>
+    item.tone ? (
+      <StatusChip tone={item.tone}>{item.text}</StatusChip>
+    ) : (
+      <span className="history-flag">
+        {item.icon && <item.icon />}
+        {item.text}
+      </span>
+    );
   return (
-    <div className="history-flags">
-      {flags.map(({ icon: Icon, text }) => (
-        <span key={text} title={text}>
-          <Icon />
-          {text}
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className="history-oneline"
+          tabIndex={0}
+          aria-label={`${label}: ${items.map((i) => i.text).join(", ")}`}
+        >
+          {render(first)}
+          {rest.length > 0 && <span className="history-more">…+{rest.length}</span>}
         </span>
-      ))}
-    </div>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" align="start" className="history-tooltip">
+        <strong>{label}</strong>
+        <ul>
+          {items.map((i) => (
+            <li key={i.key}>
+              {i.icon && <i.icon />}
+              {i.text}
+            </li>
+          ))}
+        </ul>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function SafetyCell({ r }: { r: HistorySummary }) {
+  if (!r.medicalRecorded && r.bleedingRisk.length === 0)
+    return <span className="text-muted-foreground">Not recorded</span>;
+  const items: CellItem[] = [
+    ...r.allergies.map((a) => ({ key: `a-${a}`, text: `Allergy: ${a}`, icon: ShieldAlert })),
+    ...r.bleedingRisk.map((d) => ({ key: `b-${d}`, text: `Bleeding risk: ${d}`, icon: Droplet })),
+    ...r.infectious.map((c) => ({ key: `i-${c}`, text: `Infection: ${c}`, icon: AlertTriangle })),
+    ...(r.clearance === "Pending"
+      ? [{ key: "clearance", text: "Clearance pending", icon: AlertTriangle }]
+      : []),
+  ];
+  if (items.length === 0) return <StatusChip tone="success">No alerts</StatusChip>;
+  return <OneLine items={items} label="Safety alerts" />;
+}
+
+function ConsentCell({ r }: { r: HistorySummary }) {
+  return (
+    <OneLine
+      label="Consent"
+      items={[
+        {
+          key: "surgery",
+          text: `Surgery · ${r.surgeryConsent}`,
+          tone: CONSENT_TONE[r.surgeryConsent],
+        },
+        {
+          key: "photos",
+          text: `Photos · ${r.photoUse ?? r.photoConsent}`,
+          tone: CONSENT_TONE[r.photoConsent],
+        },
+      ]}
+    />
   );
 }
 
@@ -81,7 +142,7 @@ export function HistoryView({ onOpen }: { onOpen: (patientId: string) => void })
   const count = (f: Filter) => rows.filter(FILTERS.find((x) => x.id === f)!.test).length;
 
   return (
-    <>
+    <TooltipProvider delayDuration={150}>
       <PageHeader
         title="History"
         description="Medical baseline, hair assessment, photo vault and consent records for every patient"
@@ -242,14 +303,7 @@ export function HistoryView({ onOpen }: { onOpen: (patientId: string) => void })
                       )}
                     </td>
                     <td>
-                      <div className="history-consents">
-                        <StatusChip tone={CONSENT_TONE[r.surgeryConsent]}>
-                          Surgery · {r.surgeryConsent}
-                        </StatusChip>
-                        <StatusChip tone={CONSENT_TONE[r.photoConsent]}>
-                          Photos · {r.photoUse ?? r.photoConsent}
-                        </StatusChip>
-                      </div>
+                      <ConsentCell r={r} />
                     </td>
                     <td>{r.updatedAt ? dateTime(r.updatedAt) : "—"}</td>
                     <td>
@@ -272,6 +326,6 @@ export function HistoryView({ onOpen }: { onOpen: (patientId: string) => void })
           </div>
         )}
       </section>
-    </>
+    </TooltipProvider>
   );
 }

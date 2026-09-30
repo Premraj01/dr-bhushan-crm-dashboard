@@ -31,6 +31,8 @@ import { PatientHistoryDialog } from "@/components/history/patient-history-dialo
 import { HistoryView } from "@/components/history/history-view";
 import { AddPatientDialog, EditPatientDialog, PatientProfileDialog, type EditTab } from "@/components/patients/patient-dialogs";
 import { formatVisit, usePatients, type Patient } from "@/components/patients/patients-api";
+import { LayoutToggle, PatientCards } from "@/components/patients/patient-cards";
+import { rememberPatientLayout, savedPatientLayout, type PatientLayout } from "@/components/patients/patient-layout";
 import { CatalogDialog, ConcernCatalogPanel, TreatmentCatalogPanel, type CatalogEditor } from "@/components/settings/catalog-settings";
 import { PlansSettingsPanel } from "@/components/plans/plans-settings";
 import { ClinicTimingsSettings } from "@/components/settings/clinic-timings-settings";
@@ -153,9 +155,12 @@ function PatientRecords({ query, rows, limit, onSelect }: { query: ReturnType<ty
 
 function PatientsView({ onAdd, onSelect }: { onAdd: () => void; onSelect: (id: string) => void }) {
   const [query, setQuery] = useState("");
+  const [layout, setLayoutState] = useState<PatientLayout>(savedPatientLayout);
+  const setLayout = (next: PatientLayout) => { setLayoutState(next); rememberPatientLayout(next); };
   const patientsQuery = usePatients();
-  const filtered = (patientsQuery.data ?? []).filter(p => `${p.name} ${p.id} ${p.phone}`.toLowerCase().includes(query.toLowerCase()));
-  return <><PageHeader title="Patients" description="Clinical records, treatment plans and progress history" action="Add patient" onAction={onAdd} /><div className="toolbar"><label className="field-search"><Search /><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search name, phone or patient ID" /></label><Button variant="outline"><FlaskConical />All treatments<ChevronDown /></Button><Button variant="outline"><FileText />Export</Button></div><section className="panel"><SectionHeader title={patientsQuery.data ? `${filtered.length} patients` : "Patients"} subtitle="Click a patient to view, edit or create a package" /><PatientRecords query={patientsQuery} rows={filtered} onSelect={onSelect} />{patientsQuery.data && filtered.length === 0 && <div className="empty-state"><Search /><h3>No patients found</h3><p>Try a different name, phone number or patient ID.</p></div>}</section></>;
+  const q = query.trim().toLowerCase();
+  const filtered = (patientsQuery.data ?? []).filter(p => !q || `${p.name} ${p.id} ${p.phone} ${p.concern ?? ""} ${p.treatment}`.toLowerCase().includes(q));
+  return <><PageHeader title="Patients" description="Clinical records, treatment plans and progress history" action="Add patient" onAction={onAdd} /><div className="toolbar"><label className="field-search"><Search /><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search name, phone or patient ID" /></label><Button variant="outline"><FlaskConical />All treatments<ChevronDown /></Button><Button variant="outline"><FileText />Export</Button></div><section className="panel"><SectionHeader title={patientsQuery.data ? `${filtered.length} patients` : "Patients"} subtitle="Click a patient to view, edit or create a package" trailing={<LayoutToggle value={layout} onChange={setLayout} />} />{layout === "cards" && patientsQuery.data ? (filtered.length > 0 && <PatientCards rows={filtered} onSelect={onSelect} />) : <PatientRecords query={patientsQuery} rows={filtered} onSelect={onSelect} />}{patientsQuery.data && filtered.length === 0 && <div className="empty-state"><Search /><h3>No patients found</h3><p>Try a different name, phone number or patient ID.</p></div>}</section></>;
 }
 
 

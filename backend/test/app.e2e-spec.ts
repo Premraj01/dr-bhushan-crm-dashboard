@@ -489,6 +489,23 @@ describe('CRM API (e2e)', () => {
       return t.toISOString().slice(0, 10);
     };
 
+    it("lists each patient's next booked visit", async () => {
+      const patientId = await newPatient('Upcoming Visit Patient');
+      await bookVisit(patientId, 'PRP session', '2027-06-20T10:00:00+05:30');
+      const first = (
+        await bookVisit(patientId, 'Consultation', '2027-06-10T11:00:00+05:30')
+      ).body as Apt;
+      const res = await request(app.getHttpServer())
+        .get('/api/appointments/upcoming')
+        .set(authed())
+        .expect(200);
+      expect(
+        (res.body as { id: string; patientId: string }[]).find(
+          (v) => v.patientId === patientId,
+        ),
+      ).toMatchObject({ id: first.id, type: 'Consultation' });
+    });
+
     it('records a visit prescription in the patient history', async () => {
       const patientId = await newPatient('Prescription Patient');
       const visit = (

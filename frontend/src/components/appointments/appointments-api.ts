@@ -186,6 +186,34 @@ export function useAppointments(params: { month: string } | { date: string }) {
   return query;
 }
 
+/** A patient's next booked visit (Scheduled or Rescheduled, today or later). */
+export type UpcomingVisit = Pick<
+  Appointment,
+  "id" | "patientId" | "startsAt" | "type" | "doctor" | "status"
+>;
+
+/** Next booked visit per patient id, kept live with the calendar. */
+export function useUpcomingVisits() {
+  const queryClient = useQueryClient();
+  const query = useQuery({
+    queryKey: ["appointments", "upcoming"],
+    queryFn: () => api<UpcomingVisit[]>("/appointments/upcoming"),
+    retry: 1,
+    select: (visits) => new Map(visits.map((v) => [v.patientId!, v])),
+  });
+  const live = getToken() !== null;
+  useEffect(() => {
+    if (!live) return;
+    const refresh = () =>
+      void queryClient.invalidateQueries({ queryKey: ["appointments", "upcoming"] });
+    const socket = getSocket();
+    const events = ["appointment.created", "appointment.updated", "appointment.deleted"];
+    events.forEach((e) => socket.on(e, refresh));
+    return () => events.forEach((e) => socket.off(e, refresh));
+  }, [queryClient, live]);
+  return query;
+}
+
 /** Appointments across a fixed set of clinic-local months, for overview calendars. */
 export function useAppointmentMonths(months: string[], enabled = true) {
   const queryClient = useQueryClient();

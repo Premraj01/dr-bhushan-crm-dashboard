@@ -199,6 +199,48 @@ const demoAppointments: SeedEntity<Appointment>[] = [
     durationMinutes: 30,
     status: 'Scheduled',
   },
+  // Upcoming visits (shown on the Patients cards and in the calendar).
+  {
+    id: 'APT-506',
+    patientId: 'PT-1081',
+    patientName: 'Siddharth Jain',
+    type: 'Follow-up consultation',
+    doctor: 'Dr. Bhushan Patil',
+    startsAt: ist('2026-10-06T15:30:00'),
+    durationMinutes: 30,
+    status: 'Scheduled',
+  },
+  {
+    id: 'APT-507',
+    patientId: 'PT-1080',
+    patientName: 'Kavita Rao',
+    type: 'PRP Session 6',
+    doctor: 'Dr. Sonal Desai',
+    startsAt: ist('2026-10-13T12:00:00'),
+    durationMinutes: 45,
+    status: 'Scheduled',
+  },
+  {
+    id: 'APT-508',
+    patientId: 'PT-1084',
+    patientName: 'Ananya Deshmukh',
+    type: 'PRP Session 4',
+    doctor: 'Dr. Bhushan Patil',
+    startsAt: ist('2026-10-24T11:30:00'),
+    durationMinutes: 45,
+    status: 'Rescheduled',
+    rescheduledAt: ist('2026-09-27T10:00:00'),
+  },
+  {
+    id: 'APT-509',
+    patientId: 'PT-1083',
+    patientName: 'Rohan Kulkarni',
+    type: 'Pre-op consultation',
+    doctor: 'Dr. Bhushan Patil',
+    startsAt: ist('2026-10-20T16:30:00'),
+    durationMinutes: 30,
+    status: 'Scheduled',
+  },
 ];
 
 export const seedLeads: SeedEntity<Lead>[] = [

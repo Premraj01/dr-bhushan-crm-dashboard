@@ -28,6 +28,12 @@ export class AppointmentsController {
     return this.appointments.list(query);
   }
 
+  /** Each patient's next booked visit. Declared before :id so it isn't read as an id. */
+  @Get('upcoming')
+  upcoming() {
+    return this.appointments.upcoming();
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.appointments.findOne(id);
