@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { ArrowRight, CircleSlash, LoaderCircle, PackagePlus, Pencil } from "lucide-react";
+import {
+  ArrowRight,
+  CircleSlash,
+  ClipboardList,
+  LoaderCircle,
+  PackagePlus,
+  Pencil,
+} from "lucide-react";
+import { useHistory } from "@/components/history/history-api";
+import { SafetyStrip } from "@/components/history/safety-strip";
 import { Banner, StatusChip, type Tone } from "@/components/crm-ui";
 import {
   inr,
@@ -18,20 +27,24 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ApiError } from "@/lib/api";
+import { errorText } from "@/lib/api";
 import { initials } from "@/lib/mock-auth";
 import { cn } from "@/lib/utils";
 import {
   clinicToday,
   formatDay,
   formatVisit,
+  GENDERS,
   useCreatePackage,
+  useCreatePatient,
   usePackages,
   usePatient,
   useSetPackageStatus,
   useUpdatePatient,
+  type Gender,
   type PackageStatus,
   type Patient,
+  type PatientInput,
   type TreatmentPackage,
 } from "./patients-api";
 import { PlanItemsEditor, PlanPreview } from "@/components/plans/plan-editor";
@@ -45,14 +58,6 @@ import {
 import { useDebounced } from "@/lib/use-debounced";
 
 export type EditTab = "details" | "package";
-
-function errorText(error: unknown): string {
-  if (error instanceof ApiError) {
-    if (error.status === 403) return "You don’t have permission to do that.";
-    return error.message;
-  }
-  return "Couldn’t reach the clinic server. Make sure the backend is running.";
-}
 
 const PACKAGE_TONE: Record<PackageStatus, Tone> = {
   Accepted: "success",
@@ -68,6 +73,7 @@ export function PatientProfileDialog({
   canEditRecord,
   onOpenChange,
   onEdit,
+  onOpenHistory,
 }: {
   patientId: string | null;
   canCreatePackages: boolean;
@@ -75,8 +81,10 @@ export function PatientProfileDialog({
   canEditRecord: boolean;
   onOpenChange: (open: boolean) => void;
   onEdit: (id: string, tab: EditTab) => void;
+  onOpenHistory: (id: string) => void;
 }) {
   const { data: patient, isPending } = usePatient(patientId);
+  const { data: history, isSuccess: historyLoaded } = useHistory(patientId);
   const { data: packages } = usePackages(patientId);
   const next = upcomingVisits(packages ?? [])[0];
 
@@ -101,13 +109,19 @@ export function PatientProfileDialog({
                 <div>
                   <DialogTitle>{patient.name}</DialogTitle>
                   <DialogDescription>
-                    {[patient.id, patient.age != null && `${patient.age} years`, patient.phone]
+                    {[
+                      patient.id,
+                      patient.age != null && `${patient.age} years`,
+                      patient.gender,
+                      patient.phone,
+                    ]
                       .filter(Boolean)
                       .join(" · ")}
                   </DialogDescription>
                 </div>
               </div>
             </DialogHeader>
+            {historyLoaded && <SafetyStrip history={history} />}
             <div className="profile-summary">
               <div>
                 <span>Primary concern</span>
@@ -131,6 +145,7 @@ export function PatientProfileDialog({
                 </div>
               )}
             </div>
+            <PersonalDetails patient={patient} />
             <TreatmentTimeline patient={patient} packages={packages ?? []} />
             <PackageList
               patientId={patient.id}
@@ -140,6 +155,10 @@ export function PatientProfileDialog({
             <DialogFooter>
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Close
+              </Button>
+              <Button variant="outline" onClick={() => onOpenHistory(patient.id)}>
+                <ClipboardList />
+                Patient history
               </Button>
               {canEditRecord && (
                 <Button onClick={() => onEdit(patient.id, "details")}>
@@ -152,6 +171,29 @@ export function PatientProfileDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Contact and emergency details; only the fields that were recorded. */
+function PersonalDetails({ patient: p }: { patient: Patient }) {
+  const ec = p.emergencyContact;
+  const rows: [string, string | undefined][] = [
+    ["Date of birth", p.dateOfBirth && longDate(p.dateOfBirth)],
+    ["Email", p.email],
+    ["Address", p.address],
+    ["Emergency contact", ec && `${ec.name} (${ec.relationship}) · ${ec.phone}`],
+  ];
+  const shown = rows.filter((r): r is [string, string] => !!r[1]);
+  if (shown.length === 0) return null;
+  return (
+    <dl className="profile-details">
+      {shown.map(([label, value]) => (
+        <div key={label}>
+          <dt>{label}</dt>
+          <dd>{value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -364,7 +406,7 @@ function PackageList({
   );
 }
 
-function PackageCard({ pkg, actions }: { pkg: TreatmentPackage; actions?: ReactNode }) {
+export function PackageCard({ pkg, actions }: { pkg: TreatmentPackage; actions?: ReactNode }) {
   const created = new Date(pkg.createdAt).toLocaleDateString("en-GB", {
     day: "2-digit",
     month: "short",
@@ -502,7 +544,7 @@ export function EditPatientDialog({
               </TabsTrigger>
             </TabsList>
             <TabsContent value="details">
-              <PatientDetailsForm
+              <EditDetails
                 key={patient.id}
                 patient={patient}
                 onCancel={() => onOpenChange(false)}
@@ -536,86 +578,273 @@ export function EditPatientDialog({
   );
 }
 
+/* ---------- details form (shared by add and edit) ---------- */
+
+const PHONE_PATTERN = "\\+?[0-9][0-9 \\-]{6,19}";
+
+type DetailsState = {
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  dateOfBirth: string;
+  age: string;
+  gender: string;
+  phone: string;
+  email: string;
+  address: string;
+  ecName: string;
+  ecRelationship: string;
+  ecPhone: string;
+  concern: string;
+  notes: string;
+};
+
+/** Older records only have a full name; split it so it can be corrected into parts. */
+function nameParts(p: Patient): Pick<DetailsState, "firstName" | "middleName" | "lastName"> {
+  if (p.firstName)
+    return { firstName: p.firstName, middleName: p.middleName ?? "", lastName: p.lastName ?? "" };
+  const words = p.name.trim().split(/\s+/);
+  if (words.length === 1) return { firstName: words[0]!, middleName: "", lastName: "" };
+  return {
+    firstName: words[0]!,
+    middleName: words.slice(1, -1).join(" "),
+    lastName: words[words.length - 1]!,
+  };
+}
+
+function initialDetails(p?: Patient): DetailsState {
+  return {
+    ...(p ? nameParts(p) : { firstName: "", middleName: "", lastName: "" }),
+    dateOfBirth: p?.dateOfBirth ?? "",
+    age: p?.age != null && !p.dateOfBirth ? String(p.age) : "",
+    gender: p?.gender ?? "",
+    phone: p?.phone ?? "",
+    email: p?.email ?? "",
+    address: p?.address ?? "",
+    ecName: p?.emergencyContact?.name ?? "",
+    ecRelationship: p?.emergencyContact?.relationship ?? "",
+    ecPhone: p?.emergencyContact?.phone ?? "",
+    concern: p?.concern ?? "",
+    notes: p?.notes ?? "",
+  };
+}
+
+function ageFrom(dateOfBirth: string): number | null {
+  if (!dateOfBirth) return null;
+  const [y, m, d] = dateOfBirth.split("-").map(Number) as [number, number, number];
+  const [ty, tm, td] = clinicToday().split("-").map(Number) as [number, number, number];
+  const age = ty - y - (tm < m || (tm === m && td < d) ? 1 : 0);
+  return age >= 0 ? age : null;
+}
+
+function detailsPayload(f: DetailsState): PatientInput & Pick<Patient, "phone"> {
+  const t = (v: string) => v.trim();
+  const hasContact = !!(t(f.ecName) || t(f.ecRelationship) || t(f.ecPhone));
+  return {
+    firstName: t(f.firstName),
+    ...(t(f.middleName) && { middleName: t(f.middleName) }),
+    lastName: t(f.lastName),
+    ...(f.dateOfBirth ? { dateOfBirth: f.dateOfBirth } : f.age !== "" && { age: Number(f.age) }),
+    ...(f.gender && { gender: f.gender as Gender }),
+    phone: t(f.phone),
+    ...(t(f.email) && { email: t(f.email) }),
+    ...(t(f.address) && { address: t(f.address) }),
+    ...(hasContact && {
+      emergencyContact: {
+        name: t(f.ecName),
+        relationship: t(f.ecRelationship),
+        phone: t(f.ecPhone),
+      },
+    }),
+    ...(f.concern && { concern: f.concern }),
+    ...(t(f.notes) && { notes: t(f.notes) }),
+  };
+}
+
 function PatientDetailsForm({
   patient,
+  submitLabel,
+  isPending,
+  error,
   onCancel,
-  onSaved,
+  onSubmit,
 }: {
-  patient: Patient;
+  /** Absent when registering a new patient. */
+  patient?: Patient;
+  submitLabel: string;
+  isPending: boolean;
+  error: unknown;
   onCancel: () => void;
-  onSaved: () => void;
+  onSubmit: (body: PatientInput & Pick<Patient, "phone">) => void;
 }) {
-  const update = useUpdatePatient(patient.id);
   const { data: concerns } = useCatalog<ConcernOption>("concerns");
-  const [form, setForm] = useState({
-    name: patient.name,
-    age: patient.age != null ? String(patient.age) : "",
-    phone: patient.phone,
-    email: patient.email ?? "",
-    concern: patient.concern ?? "",
-    notes: patient.notes ?? "",
-  });
-  const set = (k: keyof typeof form) => (e: { target: { value: string } }) =>
+  const [form, setForm] = useState(() => initialDetails(patient));
+  const set = (k: keyof DetailsState) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
   // Active concerns from Settings, keeping the patient's current value even if it's not in the list.
   const concernNames = [
     ...new Set(
-      [...(concerns ?? []).filter((c) => c.active).map((c) => c.name), patient.concern].filter(
+      [...(concerns ?? []).filter((c) => c.active).map((c) => c.name), patient?.concern].filter(
         (c): c is string => !!c,
       ),
     ),
   ];
+  const age = ageFrom(form.dateOfBirth);
+  const needsContact = !!(form.ecName.trim() || form.ecRelationship.trim() || form.ecPhone.trim());
+  const scale =
+    form.gender === "Male"
+      ? "Hair loss is staged on the Norwood scale."
+      : form.gender === "Female"
+        ? "Hair loss is staged on the Ludwig scale."
+        : "Used for hormonal evaluation and hair-loss staging (Norwood / Ludwig).";
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    update.mutate(
-      {
-        name: form.name.trim(),
-        ...(form.age !== "" && { age: Number(form.age) }),
-        phone: form.phone.trim(),
-        ...(form.email.trim() && { email: form.email.trim() }),
-        ...(form.concern && { concern: form.concern }),
-        ...(form.notes.trim() && { notes: form.notes.trim() }),
-      },
-      { onSuccess: onSaved },
-    );
+    onSubmit(detailsPayload(form));
   };
 
   return (
     <form onSubmit={submit}>
-      {update.isError && (
+      {error != null && (
         <div className="mt-2">
-          <Banner tone="error">{errorText(update.error)}</Banner>
+          <Banner tone="error">{errorText(error)}</Banner>
         </div>
       )}
-      <div className="form-grid mt-4">
+      <div className="form-grid patient-form mt-4">
+        <h4 className="full form-section-title">Personal details</h4>
+        <p className="full field-note">Enter the name exactly as on the patient’s official ID.</p>
         <label>
-          Full name
-          <input required maxLength={120} value={form.name} onChange={set("name")} />
+          First name
+          <input required maxLength={60} value={form.firstName} onChange={set("firstName")} />
         </label>
         <label>
-          Age
+          Middle name
           <input
-            type="number"
-            min={0}
-            max={120}
-            value={form.age}
-            onChange={set("age")}
+            maxLength={60}
+            value={form.middleName}
+            onChange={set("middleName")}
             placeholder="Optional"
           />
         </label>
         <label>
+          Last name
+          <input required maxLength={60} value={form.lastName} onChange={set("lastName")} />
+        </label>
+        <label>
+          Gender
+          <select required={!patient} value={form.gender} onChange={set("gender")}>
+            <option value="">{patient ? "Not recorded" : "Select gender"}</option>
+            {GENDERS.map((g) => (
+              <option key={g}>{g}</option>
+            ))}
+          </select>
+        </label>
+        <p className="full field-note">{scale}</p>
+        <label>
+          Date of birth
+          <input
+            type="date"
+            max={clinicToday()}
+            value={form.dateOfBirth}
+            onChange={set("dateOfBirth")}
+          />
+        </label>
+        <label>
+          Age
+          {form.dateOfBirth ? (
+            <input readOnly disabled value={age != null ? `${age} years` : ""} />
+          ) : (
+            <input
+              type="number"
+              min={0}
+              max={120}
+              value={form.age}
+              onChange={set("age")}
+              placeholder="If date of birth is unknown"
+            />
+          )}
+        </label>
+
+        <h4 className="full form-section-title">Contact information</h4>
+        <label>
           Mobile number
-          <input required value={form.phone} onChange={set("phone")} placeholder="+91" />
+          <input
+            required
+            type="tel"
+            pattern={PHONE_PATTERN}
+            title="A valid phone number, e.g. +91 98230 78142"
+            value={form.phone}
+            onChange={set("phone")}
+            placeholder="+91"
+          />
         </label>
         <label>
           Email
           <input type="email" value={form.email} onChange={set("email")} placeholder="Optional" />
         </label>
+        <p className="full field-note">
+          The mobile number receives WhatsApp updates and appointment reminders.
+        </p>
+        <label className="full">
+          Residential address
+          <textarea
+            maxLength={300}
+            value={form.address}
+            onChange={set("address")}
+            placeholder="House / flat, street, area, city, PIN code"
+          />
+        </label>
+
+        <h4 className="full form-section-title">Emergency contact</h4>
+        <p className="full field-note">
+          A family member to call in a medical emergency during or after a procedure.
+        </p>
+        <label>
+          Contact name
+          <input
+            required={needsContact}
+            maxLength={120}
+            value={form.ecName}
+            onChange={set("ecName")}
+            placeholder="Optional"
+          />
+        </label>
+        <label>
+          Relationship
+          <input
+            required={needsContact}
+            maxLength={60}
+            list="relationship-options"
+            value={form.ecRelationship}
+            onChange={set("ecRelationship")}
+            placeholder="e.g. Spouse, Father"
+          />
+          <datalist id="relationship-options">
+            {["Spouse", "Father", "Mother", "Son", "Daughter", "Brother", "Sister", "Friend"].map(
+              (r) => (
+                <option key={r} value={r} />
+              ),
+            )}
+          </datalist>
+        </label>
+        <label>
+          Contact phone
+          <input
+            required={needsContact}
+            type="tel"
+            pattern={PHONE_PATTERN}
+            title="A valid phone number, e.g. +91 98230 78142"
+            value={form.ecPhone}
+            onChange={set("ecPhone")}
+            placeholder="+91"
+          />
+        </label>
+
+        <h4 className="full form-section-title">Clinical</h4>
         <label>
           Primary concern
           <select value={form.concern} onChange={set("concern")}>
-            {!patient.concern && <option value="">Not recorded yet</option>}
+            {!patient?.concern && <option value="">Not recorded yet</option>}
             {concernNames.map((c) => (
               <option key={c}>{c}</option>
             ))}
@@ -632,21 +861,88 @@ function PatientDetailsForm({
         </label>
       </div>
       <DialogFooter className="mt-6">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={update.isPending}>
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isPending}>
           Cancel
         </Button>
-        <Button type="submit" disabled={update.isPending}>
-          {update.isPending ? (
+        <Button type="submit" disabled={isPending}>
+          {isPending ? (
             <>
               <LoaderCircle className="animate-spin" />
               Saving…
             </>
           ) : (
-            "Save changes"
+            submitLabel
           )}
         </Button>
       </DialogFooter>
     </form>
+  );
+}
+
+function EditDetails({
+  patient,
+  onCancel,
+  onSaved,
+}: {
+  patient: Patient;
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const update = useUpdatePatient(patient.id);
+  return (
+    <PatientDetailsForm
+      patient={patient}
+      submitLabel="Save changes"
+      isPending={update.isPending}
+      error={update.isError ? update.error : null}
+      onCancel={onCancel}
+      onSubmit={(body) => update.mutate(body, { onSuccess: onSaved })}
+    />
+  );
+}
+
+/* ---------- add ---------- */
+
+export function AddPatientDialog({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreated: (patient: Patient) => void;
+}) {
+  const create = useCreatePatient();
+  const [session, setSession] = useState(0);
+  const [wasOpen, setWasOpen] = useState(open);
+  // Start with an empty form each time the dialog opens.
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      setSession((n) => n + 1);
+      create.reset();
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="edit-patient-dialog">
+        <DialogHeader>
+          <DialogTitle>Add patient</DialogTitle>
+          <DialogDescription>
+            Register a new patient. The concern and notes can be completed after consultation.
+          </DialogDescription>
+        </DialogHeader>
+        <PatientDetailsForm
+          key={session}
+          submitLabel="Register patient"
+          isPending={create.isPending}
+          error={create.isError ? create.error : null}
+          onCancel={() => onOpenChange(false)}
+          onSubmit={(body) => create.mutate(body, { onSuccess: onCreated })}
+        />
+      </DialogContent>
+    </Dialog>
   );
 }
 

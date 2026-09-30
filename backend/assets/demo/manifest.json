@@ -1,0 +1,509 @@
+{
+  "photos": [
+    {
+      "patientId": "PT-1079",
+      "angle": "Frontal hairline",
+      "milestone": "Pre-operative",
+      "takenOn": "2025-09-01",
+      "note": "Baseline set before FUE; dry hair, clinic lighting",
+      "uploadedBy": {
+        "id": "USR-1",
+        "name": "Dr. Bhushan Patil"
+      },
+      "file": "photos/PT-1079-pre-operative-frontal-hairline.jpg"
+    },
+    {
+      "patientId": "PT-1079",
+      "angle": "Top / vertex",
+      "milestone": "Pre-operative",
+      "takenOn": "2025-09-01",
+      "note": "Baseline set before FUE; dry hair, clinic lighting",
+      "uploadedBy": {
+        "id": "USR-1",
+        "name": "Dr. Bhushan Patil"
+      },
+      "file": "photos/PT-1079-pre-operative-top-vertex.jpg"
+    },
+    {
+      "patientId": "PT-1079",
+      "angle": "Crown",
+      "milestone": "Pre-operative",
+      "takenOn": "2025-09-01",
+      "note": "Baseline set before FUE; dry hair, clinic lighting",
+      "uploadedBy": {
+        "id": "USR-1",
+        "name": "Dr. Bhushan Patil"
+      },
+      "file": "photos/PT-1079-pre-operative-crown.jpg"
+    },
+    {
+      "patientId": "PT-1079",
+      "angle": "Left profile",
+      "milestone": "Pre-operative",
+      "takenOn": "2025-09-01",
+      "note": "Baseline set before FUE; dry hair, clinic lighting",
+      "uploadedBy": {
+        "id": "USR-1",
+        "name": "Dr. Bhushan Patil"
+      },
+      "file": "photos/PT-1079-pre-operative-left-profile.jpg"
+    },
+    {
+      "patientId": "PT-1079",
+      "angle": "Right profile",
+      "milestone": "Pre-operative",
+      "takenOn": "2025-09-01",
+      "note": "Baseline set before FUE; dry hair, clinic lighting",
+      "uploadedBy": {
+        "id": "USR-1",
+        "name": "Dr. Bhushan Patil"
+      },
+      "file": "photos/PT-1079-pre-operative-right-profile.jpg"
+    },
+    {
+      "patientId": "PT-1079",
+      "angle": "Back (donor area)",
+      "milestone": "Pre-operative",
+      "takenOn": "2025-09-01",
+      "note": "Baseline set before FUE; dry hair, clinic lighting",
+      "uploadedBy": {
+        "id": "USR-1",
+        "name": "Dr. Bhushan Patil"
+      },
+      "file": "photos/PT-1079-pre-operative-back-donor-area.jpg"
+    },
+    {
+      "patientId": "PT-1079",
+      "angle": "Wet hair",
+      "milestone": "Pre-operative",
+      "takenOn": "2025-09-01",
+      "note": "Baseline set before FUE; dry hair, clinic lighting",
+      "uploadedBy": {
+        "id": "USR-1",
+        "name": "Dr. Bhushan Patil"
+      },
+      "file": "photos/PT-1079-pre-operative-wet-hair.jpg"
+    },
+    {
+      "patientId": "PT-1079",
+      "angle": "Frontal hairline",
+      "milestone": "Day 1 post-op",
+      "takenOn": "2025-09-09",
+      "note": "First wash done at clinic",
+      "uploadedBy": {
+        "id": "USR-3",
+        "name": "Priya More"
+      },
+      "file": "photos/PT-1079-day-1-post-op-frontal-hairline.jpg"
+    },
+    {
+      "patientId": "PT-1079",
+      "angle": "Top / vertex",
+      "milestone": "Day 1 post-op",
+      "takenOn": "2025-09-09",
+      "note": "First wash done at clinic",
+      "uploadedBy": {
+        "id": "USR-3",
+        "name": "Priya More"
+      },
+      "file": "photos/PT-1079-day-1-post-op-top-vertex.jpg"
+    },
+    {
+      "patientId": "PT-1079",
+      "angle": "Back (donor area)",
+      "milestone": "Day 1 post-op",
+      "takenOn": "2025-09-09",
+      "note": "First wash done at clinic",
+      "uploadedBy": {
+        "id": "USR-3",
+        "name": "Priya More"
+      },
+      "file": "photos/PT-1079-day-1-post-op-back-donor-area.jpg"
+    },
+    {
+      "patientId": "PT-1079",
+      "angle": "Frontal hairline",
+      "milestone": "1 month",
+      "takenOn": "2025-10-08",
+      "note": "Expected shedding of transplanted hair",
+      "uploadedBy": {
+        "id": "USR-3",
+        "name": "Priya More"
+      },
+      "file": "photos/PT-1079-1-month-frontal-hairline.jpg"
+    },
+    {
+      "patientId": "PT-1079",
+      "angle": "Top / vertex",
+      "milestone": "1 month",
+      "takenOn": "2025-10-08",
+      "note": "Expected shedding of transplanted hair",
+      "uploadedBy": {
+        "id": "USR-3",
+        "name": "Priya More"
+      },
+      "file": "photos/PT-1079-1-month-top-vertex.jpg"
+    },
+    {
+      "patientId": "PT-1079",
+      "angle": "Frontal hairline",
+      "milestone": "3 months",
+      "takenOn": "2025-12-08",
+      "uploadedBy": {
+        "id": "USR-3",
+        "name": "Priya More"
+      },
+      "file": "photos/PT-1079-3-months-frontal-hairline.jpg"
+    },
+    {
+      "patientId": "PT-1079",
+      "angle": "Top / vertex",
+      "milestone": "3 months",
+      "takenOn": "2025-12-08",
+      "uploadedBy": {
+        "id": "USR-3",
+        "name": "Priya More"
+      },
+      "file": "photos/PT-1079-3-months-top-vertex.jpg"
+    },
+    {
+      "patientId": "PT-1079",
+      "angle": "Crown",
+      "milestone": "3 months",
+      "takenOn": "2025-12-08",
+      "uploadedBy": {
+        "id": "USR-3",
+        "name": "Priya More"
+      },
+      "file": "photos/PT-1079-3-months-crown.jpg"
+    },
+    {
+      "patientId": "PT-1079",
+      "angle": "Frontal hairline",
+      "milestone": "6 months",
+      "takenOn": "2026-03-09",
+      "uploadedBy": {
+        "id": "USR-3",
+        "name": "Priya More"
+      },
+      "file": "photos/PT-1079-6-months-frontal-hairline.jpg"
+    },
+    {
+      "patientId": "PT-1079",
+      "angle": "Top / vertex",
+      "milestone": "6 months",
+      "takenOn": "2026-03-09",
+      "uploadedBy": {
+        "id": "USR-3",
+        "name": "Priya More"
+      },
+      "file": "photos/PT-1079-6-months-top-vertex.jpg"
+    },
+    {
+      "patientId": "PT-1079",
+      "angle": "Left profile",
+      "milestone": "6 months",
+      "takenOn": "2026-03-09",
+      "uploadedBy": {
+        "id": "USR-3",
+        "name": "Priya More"
+      },
+      "file": "photos/PT-1079-6-months-left-profile.jpg"
+    },
+    {
+      "patientId": "PT-1079",
+      "angle": "Frontal hairline",
+      "milestone": "1 year",
+      "takenOn": "2026-09-08",
+      "note": "Final result review",
+      "uploadedBy": {
+        "id": "USR-1",
+        "name": "Dr. Bhushan Patil"
+      },
+      "file": "photos/PT-1079-1-year-frontal-hairline.jpg"
+    },
+    {
+      "patientId": "PT-1079",
+      "angle": "Top / vertex",
+      "milestone": "1 year",
+      "takenOn": "2026-09-08",
+      "note": "Final result review",
+      "uploadedBy": {
+        "id": "USR-1",
+        "name": "Dr. Bhushan Patil"
+      },
+      "file": "photos/PT-1079-1-year-top-vertex.jpg"
+    },
+    {
+      "patientId": "PT-1079",
+      "angle": "Crown",
+      "milestone": "1 year",
+      "takenOn": "2026-09-08",
+      "note": "Final result review",
+      "uploadedBy": {
+        "id": "USR-1",
+        "name": "Dr. Bhushan Patil"
+      },
+      "file": "photos/PT-1079-1-year-crown.jpg"
+    },
+    {
+      "patientId": "PT-1079",
+      "angle": "Left profile",
+      "milestone": "1 year",
+      "takenOn": "2026-09-08",
+      "note": "Final result review",
+      "uploadedBy": {
+        "id": "USR-1",
+        "name": "Dr. Bhushan Patil"
+      },
+      "file": "photos/PT-1079-1-year-left-profile.jpg"
+    },
+    {
+      "patientId": "PT-1079",
+      "angle": "Right profile",
+      "milestone": "1 year",
+      "takenOn": "2026-09-08",
+      "note": "Final result review",
+      "uploadedBy": {
+        "id": "USR-1",
+        "name": "Dr. Bhushan Patil"
+      },
+      "file": "photos/PT-1079-1-year-right-profile.jpg"
+    },
+    {
+      "patientId": "PT-1079",
+      "angle": "Back (donor area)",
+      "milestone": "1 year",
+      "takenOn": "2026-09-08",
+      "note": "Final result review",
+      "uploadedBy": {
+        "id": "USR-1",
+        "name": "Dr. Bhushan Patil"
+      },
+      "file": "photos/PT-1079-1-year-back-donor-area.jpg"
+    },
+    {
+      "patientId": "PT-1079",
+      "angle": "Wet hair",
+      "milestone": "1 year",
+      "takenOn": "2026-09-08",
+      "note": "Final result review",
+      "uploadedBy": {
+        "id": "USR-1",
+        "name": "Dr. Bhushan Patil"
+      },
+      "file": "photos/PT-1079-1-year-wet-hair.jpg"
+    },
+    {
+      "patientId": "PT-1083",
+      "angle": "Frontal hairline",
+      "milestone": "Pre-operative",
+      "takenOn": "2026-09-18",
+      "uploadedBy": {
+        "id": "USR-1",
+        "name": "Dr. Bhushan Patil"
+      },
+      "file": "photos/PT-1083-pre-operative-frontal-hairline.jpg"
+    },
+    {
+      "patientId": "PT-1083",
+      "angle": "Top / vertex",
+      "milestone": "Pre-operative",
+      "takenOn": "2026-09-18",
+      "uploadedBy": {
+        "id": "USR-1",
+        "name": "Dr. Bhushan Patil"
+      },
+      "file": "photos/PT-1083-pre-operative-top-vertex.jpg"
+    },
+    {
+      "patientId": "PT-1083",
+      "angle": "Crown",
+      "milestone": "Pre-operative",
+      "takenOn": "2026-09-18",
+      "uploadedBy": {
+        "id": "USR-1",
+        "name": "Dr. Bhushan Patil"
+      },
+      "file": "photos/PT-1083-pre-operative-crown.jpg"
+    },
+    {
+      "patientId": "PT-1083",
+      "angle": "Left profile",
+      "milestone": "Pre-operative",
+      "takenOn": "2026-09-18",
+      "uploadedBy": {
+        "id": "USR-1",
+        "name": "Dr. Bhushan Patil"
+      },
+      "file": "photos/PT-1083-pre-operative-left-profile.jpg"
+    },
+    {
+      "patientId": "PT-1083",
+      "angle": "Right profile",
+      "milestone": "Pre-operative",
+      "takenOn": "2026-09-18",
+      "uploadedBy": {
+        "id": "USR-1",
+        "name": "Dr. Bhushan Patil"
+      },
+      "file": "photos/PT-1083-pre-operative-right-profile.jpg"
+    },
+    {
+      "patientId": "PT-1083",
+      "angle": "Back (donor area)",
+      "milestone": "Pre-operative",
+      "takenOn": "2026-09-18",
+      "uploadedBy": {
+        "id": "USR-1",
+        "name": "Dr. Bhushan Patil"
+      },
+      "file": "photos/PT-1083-pre-operative-back-donor-area.jpg"
+    },
+    {
+      "patientId": "PT-1084",
+      "angle": "Top / vertex",
+      "milestone": "Pre-operative",
+      "takenOn": "2026-07-24",
+      "note": "Baseline before PRP course",
+      "uploadedBy": {
+        "id": "USR-2",
+        "name": "Dr. Sonal Desai"
+      },
+      "file": "photos/PT-1084-pre-operative-top-vertex.jpg"
+    },
+    {
+      "patientId": "PT-1084",
+      "angle": "Frontal hairline",
+      "milestone": "Pre-operative",
+      "takenOn": "2026-07-24",
+      "note": "Baseline before PRP course",
+      "uploadedBy": {
+        "id": "USR-2",
+        "name": "Dr. Sonal Desai"
+      },
+      "file": "photos/PT-1084-pre-operative-frontal-hairline.jpg"
+    },
+    {
+      "patientId": "PT-1084",
+      "angle": "Top / vertex",
+      "milestone": "1 month",
+      "takenOn": "2026-08-24",
+      "uploadedBy": {
+        "id": "USR-2",
+        "name": "Dr. Sonal Desai"
+      },
+      "file": "photos/PT-1084-1-month-top-vertex.jpg"
+    },
+    {
+      "patientId": "PT-1084",
+      "angle": "Top / vertex",
+      "milestone": "Other",
+      "takenOn": "2026-09-26",
+      "note": "After PRP session 3",
+      "uploadedBy": {
+        "id": "USR-3",
+        "name": "Priya More"
+      },
+      "file": "photos/PT-1084-other-top-vertex.jpg"
+    }
+  ],
+  "documents": [
+    {
+      "patientId": "PT-1079",
+      "kind": "Medical clearance",
+      "title": "Physician fitness certificate — Dr. Rajesh Kulkarni",
+      "signedAt": "2025-08-28T12:00:00.000Z",
+      "format": "Physical (scanned)",
+      "notes": "BP controlled; continue amlodipine on the day.",
+      "uploadedBy": {
+        "id": "USR-3",
+        "name": "Priya More"
+      },
+      "file": "documents/PT-1079-physician-fitness-certificate-dr-rajesh-kulkarni.pdf"
+    },
+    {
+      "patientId": "PT-1079",
+      "kind": "Surgery consent",
+      "title": "Informed consent — hair transplant surgery",
+      "signedAt": "2025-09-01T05:40:00.000Z",
+      "format": "Physical (scanned)",
+      "notes": "Witness: Priya More (reception)",
+      "uploadedBy": {
+        "id": "USR-3",
+        "name": "Priya More"
+      },
+      "file": "documents/PT-1079-informed-consent-hair-transplant-surgery.pdf"
+    },
+    {
+      "patientId": "PT-1079",
+      "kind": "Photo consent",
+      "title": "Before & after photo consent",
+      "signedAt": "2025-09-01T05:45:00.000Z",
+      "format": "Physical (scanned)",
+      "photoUse": "Marketing & education",
+      "uploadedBy": {
+        "id": "USR-3",
+        "name": "Priya More"
+      },
+      "file": "documents/PT-1079-before-after-photo-consent.pdf"
+    },
+    {
+      "patientId": "PT-1083",
+      "kind": "Surgery consent",
+      "title": "Informed consent — hair transplant surgery",
+      "signedAt": "2026-09-18T06:35:00.000Z",
+      "format": "Digital",
+      "notes": "Signed on the clinic tablet after consultation.",
+      "uploadedBy": {
+        "id": "USR-1",
+        "name": "Dr. Bhushan Patil"
+      },
+      "file": "documents/PT-1083-informed-consent-hair-transplant-surgery.pdf"
+    },
+    {
+      "patientId": "PT-1083",
+      "kind": "Photo consent",
+      "title": "Before & after photo consent",
+      "signedAt": "2026-09-18T06:38:00.000Z",
+      "format": "Digital",
+      "photoUse": "Education only",
+      "uploadedBy": {
+        "id": "USR-1",
+        "name": "Dr. Bhushan Patil"
+      },
+      "file": "documents/PT-1083-before-after-photo-consent.pdf"
+    },
+    {
+      "patientId": "PT-1084",
+      "kind": "Other",
+      "title": "PRP therapy consent",
+      "signedAt": "2026-07-24T04:50:00.000Z",
+      "format": "Physical (scanned)",
+      "uploadedBy": {
+        "id": "USR-2",
+        "name": "Dr. Sonal Desai"
+      },
+      "file": "documents/PT-1084-prp-therapy-consent.pdf"
+    },
+    {
+      "patientId": "PT-1084",
+      "kind": "Photo consent",
+      "title": "Before & after photo consent",
+      "signedAt": "2026-07-24T04:55:00.000Z",
+      "format": "Physical (scanned)",
+      "photoUse": "Education only",
+      "notes": "Patient asked to stop using her photos (phone call, 26 Sep).",
+      "uploadedBy": {
+        "id": "USR-2",
+        "name": "Dr. Sonal Desai"
+      },
+      "revokedAt": "2026-09-26T11:10:00.000Z",
+      "revokedBy": {
+        "id": "USR-3",
+        "name": "Priya More"
+      },
+      "file": "documents/PT-1084-before-after-photo-consent.pdf"
+    }
+  ]
+}

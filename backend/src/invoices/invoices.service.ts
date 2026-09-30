@@ -35,9 +35,10 @@ export class InvoicesService extends CrudService<Invoice> {
     super(events, 'invoice', 'INV-', seedInvoices());
   }
 
-  list({ status }: ListInvoicesQuery): Invoice[] {
+  list({ status, patientId }: ListInvoicesQuery): Invoice[] {
     return this.findAll()
       .filter((i) => !status || i.status === status)
+      .filter((i) => !patientId || i.patientId === patientId)
       .sort((a, b) => b.id.localeCompare(a.id, undefined, { numeric: true }));
   }
 

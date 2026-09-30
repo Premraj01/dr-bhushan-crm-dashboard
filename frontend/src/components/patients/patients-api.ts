@@ -4,13 +4,30 @@ import { api, getToken } from "@/lib/api";
 import { getSocket } from "@/lib/socket";
 import type { PackageRequest, PlanItem, PriceLine, StepView } from "@/components/plans/plans-api";
 
+export const GENDERS = ["Male", "Female", "Other"] as const;
+export type Gender = (typeof GENDERS)[number];
+
+export type EmergencyContact = { name: string; relationship: string; phone: string };
+
 export type Patient = {
   id: string;
+  /** Full name as on the official ID. */
   name: string;
+  /** Absent for quick registrations made while booking and older records. */
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  /** YYYY-MM-DD; when set the server works out `age` from it. */
+  dateOfBirth?: string;
   /** Unknown for quick registrations made while booking. */
   age?: number;
+  /** Norwood scale for men, Ludwig for women. */
+  gender?: Gender;
+  /** Mobile — also used for WhatsApp updates and reminders. */
   phone: string;
   email?: string;
+  address?: string;
+  emergencyContact?: EmergencyContact;
   /** Empty until recorded at consultation. */
   concern?: string;
   treatment: string;
@@ -71,7 +88,7 @@ export function stepForBooking(
 }
 
 /** Refetch `queryKey` whenever any of `events` arrives over the websocket. */
-function useLiveInvalidate(queryKey: readonly unknown[], events: readonly string[]) {
+export function useLiveInvalidate(queryKey: readonly unknown[], events: readonly string[]) {
   const queryClient = useQueryClient();
   const key = JSON.stringify(queryKey);
   const eventList = events.join("|");
@@ -102,10 +119,21 @@ export function usePatient(id: string | null) {
   return { ...rest, data: id ? data?.find((p) => p.id === id) : undefined };
 }
 
+export type PatientInput = Partial<Omit<Patient, "id" | "treatment" | "lastVisit">>;
+
+export function useCreatePatient() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: PatientInput & Pick<Patient, "phone">) =>
+      api<Patient>("/patients", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["patients"] }),
+  });
+}
+
 export function useUpdatePatient(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: Partial<Omit<Patient, "id">>) =>
+    mutationFn: (body: PatientInput) =>
       api<Patient>(`/patients/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["patients"] }),
   });

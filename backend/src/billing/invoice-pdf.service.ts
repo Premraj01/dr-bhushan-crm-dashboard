@@ -1,7 +1,7 @@
-import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
+import { assetsDir } from '../common/assets';
 import { clinicDate, clinicTime } from '../common/dates';
 import { BillingService } from './billing.service';
 
@@ -52,18 +52,6 @@ function clinicProfile() {
     email: process.env.CLINIC_EMAIL,
     gstin: process.env.CLINIC_GSTIN,
   };
-}
-
-/** backend/assets, found from both src/ (tests) and dist/ (build). */
-function assetsDir(): string {
-  let dir = __dirname;
-  for (let i = 0; i < 6; i++) {
-    const candidate = join(dir, 'assets');
-    if (existsSync(join(candidate, 'fonts', 'Inter-Regular.ttf')))
-      return candidate;
-    dir = dirname(dir);
-  }
-  throw new Error('Invoice assets (backend/assets) not found');
 }
 
 /** Builds the printable A4 invoice (logo, line items, totals, payments). */

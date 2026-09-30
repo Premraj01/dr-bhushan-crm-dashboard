@@ -22,7 +22,9 @@ export class ApiError extends Error {
 
 async function request(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
-  if (init.body && !headers.has("content-type")) headers.set("content-type", "application/json");
+  // FormData (file uploads) sets its own multipart content type and boundary.
+  if (init.body && !(init.body instanceof FormData) && !headers.has("content-type"))
+    headers.set("content-type", "application/json");
   const token = getToken();
   if (token) headers.set("authorization", `Bearer ${token}`);
 
@@ -33,6 +35,15 @@ async function request(path: string, init: RequestInit = {}): Promise<Response> 
     throw new ApiError(res.status, message ?? res.statusText);
   }
   return res;
+}
+
+/** A message for the user from a failed API call. */
+export function errorText(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 403) return "You don’t have permission to do that.";
+    return error.message;
+  }
+  return "Couldn’t reach the clinic server. Make sure the backend is running.";
 }
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {

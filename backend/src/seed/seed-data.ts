@@ -6,6 +6,7 @@ import { Invoice } from '../invoices/invoice.entity';
 import { Payment } from '../invoices/payment.entity';
 import { TreatmentPlan } from '../plans/plan.entity';
 import { Lead } from '../leads/lead.entity';
+import { PatientHistory } from '../history/history.entity';
 import { Patient } from '../patients/patient.entity';
 import { Treatment } from '../treatments/treatment.entity';
 import { User } from '../users/user.entity';
@@ -64,6 +65,9 @@ const demoPatients: SeedEntity<Patient>[] = [
     id: 'PT-1084',
     createdAt: ist('2026-07-24T10:00:00'),
     name: 'Ananya Deshmukh',
+    firstName: 'Ananya',
+    lastName: 'Deshmukh',
+    gender: 'Female',
     age: 32,
     phone: '+91 98230 78142',
     concern: 'Hair thinning',
@@ -74,6 +78,9 @@ const demoPatients: SeedEntity<Patient>[] = [
     id: 'PT-1083',
     createdAt: ist('2026-06-05T11:30:00'),
     name: 'Rohan Kulkarni',
+    firstName: 'Rohan',
+    lastName: 'Kulkarni',
+    gender: 'Male',
     age: 41,
     phone: '+91 97654 30218',
     concern: 'Norwood IV',
@@ -84,6 +91,9 @@ const demoPatients: SeedEntity<Patient>[] = [
     id: 'PT-1082',
     createdAt: ist('2026-08-20T16:00:00'),
     name: 'Meera Shah',
+    firstName: 'Meera',
+    lastName: 'Shah',
+    gender: 'Female',
     age: 29,
     phone: '+91 98906 44109',
     concern: 'Postpartum loss',
@@ -94,6 +104,9 @@ const demoPatients: SeedEntity<Patient>[] = [
     id: 'PT-1081',
     createdAt: ist('2026-09-16T12:15:00'),
     name: 'Siddharth Jain',
+    firstName: 'Siddharth',
+    lastName: 'Jain',
+    gender: 'Male',
     age: 36,
     phone: '+91 99701 52470',
     concern: 'Receding hairline',
@@ -104,11 +117,36 @@ const demoPatients: SeedEntity<Patient>[] = [
     id: 'PT-1080',
     createdAt: ist('2026-03-10T09:45:00'),
     name: 'Kavita Rao',
+    firstName: 'Kavita',
+    lastName: 'Rao',
+    gender: 'Female',
     age: 45,
     phone: '+91 98221 90433',
     concern: 'Diffuse thinning',
     treatment: 'PRP · Session 5/6',
     lastVisit: '2026-09-15',
+  },
+  {
+    id: 'PT-1079',
+    createdAt: ist('2025-08-20T15:00:00'),
+    name: 'Amit Vinod Joshi',
+    firstName: 'Amit',
+    middleName: 'Vinod',
+    lastName: 'Joshi',
+    gender: 'Male',
+    dateOfBirth: '1988-02-14',
+    phone: '+91 98500 41276',
+    email: 'amit.joshi@example.com',
+    address: 'Flat 6B, Sai Residency, Kothrud, Pune 411038',
+    emergencyContact: {
+      name: 'Neha Joshi',
+      relationship: 'Spouse',
+      phone: '+91 98500 41277',
+    },
+    concern: 'Norwood IV',
+    treatment: 'FUE · 2,800 grafts (Sep 2025)',
+    lastVisit: '2026-09-08',
+    notes: '1-year review done — very happy with the frontal result.',
   },
 ];
 
@@ -720,7 +758,165 @@ const seedInventoryItems: SeedEntity<InventoryItem>[] = [
   },
 ];
 
+const doctor = { id: 'USR-1', name: 'Dr. Bhushan Patil' };
+
+const demoHistories: SeedEntity<PatientHistory>[] = [
+  {
+    id: 'PT-1079',
+    patientId: 'PT-1079',
+    medical: {
+      noKnownAllergies: false,
+      allergies: [
+        { substance: 'Sulfa drugs', reaction: 'Rash', severity: 'Mild' },
+      ],
+      conditions: [
+        {
+          name: 'Hypertension',
+          status: 'Current',
+          notes: 'Amlodipine 5 mg, well controlled',
+        },
+      ],
+      medications: [
+        { name: 'Amlodipine', dose: '5 mg daily', affectsBleeding: false },
+        {
+          name: 'Finasteride',
+          dose: '1 mg daily',
+          affectsBleeding: false,
+          notes: 'Started after surgery to protect the crown',
+        },
+      ],
+      surgeries: [{ procedure: 'Hernia repair', when: '2016' }],
+      clearance: 'Received',
+      clearanceNotes:
+        'Fitness certificate from Dr. Rajesh Kulkarni (physician), 28 Aug 2025.',
+      updatedBy: doctor,
+      updatedAt: ist('2025-08-28T18:00:00'),
+    },
+    hair: {
+      scale: 'Norwood',
+      grade: 'IV',
+      donor: {
+        quality: 'Excellent',
+        density: 86,
+        laxity: 'Moderate',
+        notes: 'Thick calibre, no miniaturisation in the safe donor zone.',
+      },
+      treatments: [
+        {
+          treatment: 'Minoxidil',
+          period: '2021 – 2023',
+          outcome: 'Held the crown, no frontal regrowth',
+        },
+        { treatment: 'PRP therapy', period: '3 sessions, 2024' },
+      ],
+      goals: {
+        hairline: 'Mature, slightly irregular hairline at 8 cm above the brow',
+        targetGrafts: 2800,
+        densityNotes: 'Frontal third first; crown managed medically.',
+        expectations:
+          'Explained shock loss at 1 month and final result at 12 months.',
+      },
+      updatedBy: doctor,
+      updatedAt: ist('2025-09-01T10:30:00'),
+    },
+  },
+  {
+    id: 'PT-1083',
+    patientId: 'PT-1083',
+    medical: {
+      noKnownAllergies: false,
+      allergies: [
+        {
+          substance: 'Penicillin',
+          reaction: 'Skin rash',
+          severity: 'Moderate',
+        },
+      ],
+      conditions: [
+        {
+          name: 'Hypertension',
+          status: 'Current',
+          notes: 'Controlled on medication',
+        },
+      ],
+      medications: [
+        { name: 'Telmisartan', dose: '40 mg daily', affectsBleeding: false },
+        {
+          name: 'Aspirin',
+          dose: '75 mg daily',
+          affectsBleeding: true,
+          notes: 'Stop 7 days before surgery if cardiologist agrees',
+        },
+      ],
+      surgeries: [{ procedure: 'Appendectomy', when: '2012' }],
+      clearance: 'Pending',
+      clearanceNotes: 'Cardiologist clearance requested for aspirin pause.',
+      updatedBy: doctor,
+      updatedAt: ist('2026-09-18T11:20:00'),
+    },
+    hair: {
+      scale: 'Norwood',
+      grade: 'IV',
+      donor: { quality: 'Good', density: 78, laxity: 'Moderate' },
+      treatments: [
+        {
+          treatment: 'Minoxidil 5%',
+          period: '2023 – 2024',
+          outcome: 'Slowed loss, stopped due to scalp irritation',
+        },
+        {
+          treatment: 'PRP therapy',
+          period: '4 sessions, 2025',
+          outcome: 'Mild improvement in crown',
+        },
+      ],
+      goals: {
+        hairline:
+          'Natural, age-appropriate hairline with mild temporal recession',
+        targetGrafts: 3200,
+        densityNotes: 'Priority on frontal third; crown later if donor allows.',
+      },
+      updatedBy: doctor,
+      updatedAt: ist('2026-09-18T11:25:00'),
+    },
+  },
+  {
+    id: 'PT-1084',
+    patientId: 'PT-1084',
+    medical: {
+      noKnownAllergies: true,
+      allergies: [],
+      conditions: [
+        { name: 'Thyroid disorder', status: 'Current', notes: 'Hypothyroid' },
+      ],
+      medications: [
+        { name: 'Levothyroxine', dose: '50 mcg daily', affectsBleeding: false },
+      ],
+      surgeries: [],
+      clearance: 'Not required',
+      updatedBy: doctor,
+      updatedAt: ist('2026-07-24T10:30:00'),
+    },
+    hair: {
+      scale: 'Ludwig',
+      grade: 'II',
+      donor: { quality: 'Good', density: 82 },
+      treatments: [
+        {
+          treatment: 'Biotin supplements',
+          period: '6 months',
+          outcome: 'No visible change',
+        },
+      ],
+      goals: { expectations: 'Thicker parting line; no surgery for now.' },
+      updatedBy: doctor,
+      updatedAt: ist('2026-07-24T10:35:00'),
+    },
+  },
+];
+
 export const seedPatients = demo(demoPatients);
+export const seedHistories = demo(demoHistories);
 export const seedAppointments = demo(demoAppointments);
 export const seedTreatments = demo(demoTreatments);
 export const seedInvoices = demo(demoInvoices);

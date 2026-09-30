@@ -15,7 +15,8 @@
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "pretest": "node scripts/check-node.cjs",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config ./test/jest-e2e.json"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config ./test/jest-e2e.json",
+    "demo:assets": "node scripts/generate-demo-assets.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^12.1.0",

@@ -57,6 +57,61 @@ describe('CRM API (e2e)', () => {
       .expect(200);
   });
 
+  it('registers a patient with name parts, date of birth, contacts and emergency contact', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/patients')
+      .set(authed())
+      .send({
+        firstName: 'Aarav',
+        middleName: 'Sunil',
+        lastName: 'Patil',
+        dateOfBirth: '1990-01-15',
+        gender: 'Male',
+        phone: '+91 90111 22334',
+        email: 'aarav@example.com',
+        address: '12 FC Road, Pune 411004',
+        emergencyContact: {
+          name: 'Sunita Patil',
+          relationship: 'Mother',
+          phone: '+91 90111 22335',
+        },
+      })
+      .expect(201);
+    expect(res.body).toMatchObject({
+      name: 'Aarav Sunil Patil',
+      gender: 'Male',
+      treatment: 'Consultation',
+      emergencyContact: { relationship: 'Mother' },
+    });
+    expect(res.body.age).toBeGreaterThanOrEqual(36);
+
+    const updated = await request(app.getHttpServer())
+      .patch(`/api/patients/${res.body.id}`)
+      .set(authed())
+      .send({ lastName: 'Patil-Deshmukh' })
+      .expect(200);
+    expect(updated.body.name).toBe('Aarav Sunil Patil-Deshmukh');
+
+    // Last name is required with a first name; bad gender, future birth date and
+    // an incomplete emergency contact are refused.
+    for (const body of [
+      { firstName: 'Solo', phone: '+91 90111 22336' },
+      { name: 'X', gender: 'Unknown', phone: '+91 90111 22337' },
+      { name: 'X', dateOfBirth: '2999-01-01', phone: '+91 90111 22338' },
+      {
+        name: 'X',
+        phone: '+91 90111 22339',
+        emergencyContact: { name: 'Y' },
+      },
+    ]) {
+      await request(app.getHttpServer())
+        .post('/api/patients')
+        .set(authed())
+        .send(body)
+        .expect(400);
+    }
+  });
+
   it('only lets admins delete records', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/auth/demo')
@@ -2093,6 +2148,236 @@ describe('CRM API (e2e)', () => {
         .delete(`/api/appointments/${id}/complete`)
         .set(authed())
         .expect(400);
+    });
+  });
+  describe('patient history', () => {
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+      'base64',
+    );
+    const asRole = async (role: string) => ({
+      Authorization: `Bearer ${
+        (
+          await request(app.getHttpServer())
+            .post('/api/auth/demo')
+            .send({ role })
+        ).body.accessToken
+      }`,
+    });
+    const medical = {
+      noKnownAllergies: false,
+      allergies: [
+        { substance: 'Lidocaine', reaction: 'Hives', severity: 'Severe' },
+      ],
+      conditions: [{ name: 'Diabetes', status: 'Current' }],
+      medications: [{ name: 'Warfarin', dose: '5 mg', affectsBleeding: true }],
+      surgeries: [],
+      clearance: 'Pending',
+    };
+
+    it('records the medical baseline and hair assessment (clinicians only)', async () => {
+      const res = await request(app.getHttpServer())
+        .put('/api/patients/PT-1081/history/medical')
+        .set(authed())
+        .send(medical)
+        .expect(200);
+      expect(res.body.medical).toMatchObject({
+        allergies: [{ substance: 'Lidocaine' }],
+        updatedBy: { name: 'Dr. Bhushan Patil' },
+      });
+
+      await request(app.getHttpServer())
+        .put('/api/patients/PT-1081/history/medical')
+        .set(await asRole('Reception'))
+        .send(medical)
+        .expect(403);
+      await request(app.getHttpServer())
+        .put('/api/patients/PT-1081/history/medical')
+        .set(authed())
+        .send({ ...medical, noKnownAllergies: true })
+        .expect(400);
+
+      const hair = {
+        scale: 'Norwood',
+        grade: 'III vertex',
+        donor: { quality: 'Good', density: 80, laxity: 'High' },
+        treatments: [{ treatment: 'PRP therapy' }],
+        goals: { targetGrafts: 2500 },
+      };
+      await request(app.getHttpServer())
+        .put('/api/patients/PT-1081/history/hair')
+        .set(await asRole('Doctor'))
+        .send(hair)
+        .expect(200);
+      await request(app.getHttpServer())
+        .put('/api/patients/PT-1081/history/hair')
+        .set(authed())
+        .send({ ...hair, scale: 'Ludwig' })
+        .expect(400);
+
+      const all = await request(app.getHttpServer())
+        .get('/api/patients/PT-1081/history')
+        .set(await asRole('Reception'))
+        .expect(200);
+      expect(all.body.hair).toMatchObject({ grade: 'III vertex' });
+      expect(all.body.medical.medications[0].affectsBleeding).toBe(true);
+    });
+
+    it('stores photos by angle and milestone and checks the real file type', async () => {
+      const up = await request(app.getHttpServer())
+        .post('/api/patients/PT-1081/photos')
+        .set(authed())
+        .field('angle', 'Frontal hairline')
+        .field('milestone', 'Pre-operative')
+        .field('takenOn', '2026-09-16')
+        .attach('file', png, {
+          filename: 'front.png',
+          contentType: 'image/png',
+        })
+        .expect(201);
+      expect(up.body).toMatchObject({
+        angle: 'Frontal hairline',
+        file: { mimeType: 'image/png' },
+      });
+
+      const file = await request(app.getHttpServer())
+        .get(`/api/photos/${up.body.id}/file`)
+        .set(authed())
+        .expect(200);
+      expect(file.headers['content-type']).toBe('image/png');
+
+      // An HTML page renamed to .jpg is refused.
+      await request(app.getHttpServer())
+        .post('/api/patients/PT-1081/photos')
+        .set(authed())
+        .field('angle', 'Crown')
+        .field('milestone', '1 month')
+        .field('takenOn', '2026-09-16')
+        .attach('file', Buffer.from('<html><script>x</script></html>'), {
+          filename: 'x.jpg',
+          contentType: 'image/jpeg',
+        })
+        .expect(400);
+
+      const list = await request(app.getHttpServer())
+        .get('/api/patients/PT-1081/photos')
+        .set(authed())
+        .expect(200);
+      expect(list.body).toHaveLength(1);
+
+      await request(app.getHttpServer())
+        .delete(`/api/photos/${up.body.id}`)
+        .set(await asRole('Reception'))
+        .expect(403);
+      await request(app.getHttpServer())
+        .delete(`/api/photos/${up.body.id}`)
+        .set(authed())
+        .expect(204);
+    });
+
+    it('keeps signed consents and lets a consent be withdrawn', async () => {
+      const pdf = Buffer.from('%PDF-1.4\n%%EOF');
+      const doc = await request(app.getHttpServer())
+        .post('/api/patients/PT-1081/documents')
+        .set(await asRole('Reception'))
+        .field('kind', 'Photo consent')
+        .field('title', 'Before/after photo consent')
+        .field('signedAt', '2026-09-16T10:30:00+05:30')
+        .field('format', 'Physical (scanned)')
+        .field('photoUse', 'Education only')
+        .attach('file', pdf, {
+          filename: 'consent.pdf',
+          contentType: 'application/pdf',
+        })
+        .expect(201);
+      expect(doc.body).toMatchObject({
+        photoUse: 'Education only',
+        signedAt: '2026-09-16T05:00:00.000Z',
+      });
+
+      const revoked = await request(app.getHttpServer())
+        .post(`/api/documents/${doc.body.id}/revoke`)
+        .set(authed())
+        .expect(200);
+      expect(revoked.body.revokedAt).toBeDefined();
+      await request(app.getHttpServer())
+        .post(`/api/documents/${doc.body.id}/revoke`)
+        .set(authed())
+        .expect(400);
+
+      // A photo consent must say what the photos may be used for.
+      await request(app.getHttpServer())
+        .post('/api/patients/PT-1081/documents')
+        .set(authed())
+        .field('kind', 'Photo consent')
+        .field('title', 'x')
+        .field('signedAt', '2026-09-16T10:30:00+05:30')
+        .field('format', 'Digital')
+        .attach('file', pdf, {
+          filename: 'c.pdf',
+          contentType: 'application/pdf',
+        })
+        .expect(400);
+    });
+
+    it('summarises every patient for the History page', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/history')
+        .set(authed())
+        .expect(200);
+      const rohan = (res.body as { patientId: string }[]).find(
+        (r) => r.patientId === 'PT-1083',
+      );
+      expect(rohan).toMatchObject({
+        medicalRecorded: true,
+        hairGrade: 'Norwood IV',
+        allergies: ['Penicillin'],
+        bleedingRisk: ['Aspirin'],
+        clearance: 'Pending',
+        surgeryConsent: 'Signed',
+        photoUse: 'Education only',
+        photos: 6,
+      });
+    });
+
+    it('seeds demo photos and signed forms that can be downloaded', async () => {
+      const photos = await request(app.getHttpServer())
+        .get('/api/patients/PT-1079/photos')
+        .set(authed())
+        .expect(200);
+      expect(photos.body.length).toBeGreaterThanOrEqual(20);
+      expect(photos.body[0]).toMatchObject({ milestone: 'Pre-operative' });
+      const img = await request(app.getHttpServer())
+        .get(`/api/photos/${photos.body[0].id}/file`)
+        .set(authed())
+        .expect(200);
+      expect(img.headers['content-type']).toBe('image/jpeg');
+
+      const docs = await request(app.getHttpServer())
+        .get('/api/patients/PT-1084/documents')
+        .set(authed())
+        .expect(200);
+      const consent = (
+        docs.body as { id: string; kind: string; revokedAt?: string }[]
+      ).find((d) => d.kind === 'Photo consent');
+      expect(consent?.revokedAt).toBeDefined();
+      const pdf = await request(app.getHttpServer())
+        .get(`/api/documents/${consent!.id}/file`)
+        .set(authed())
+        .expect(200);
+      expect(pdf.headers['content-type']).toBe('application/pdf');
+    });
+
+    it("lists only the patient's invoices for the financial records", async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/invoices?patientId=PT-1084')
+        .set(authed())
+        .expect(200);
+      expect(
+        (res.body as { patientId?: string }[]).every(
+          (i) => i.patientId === 'PT-1084',
+        ),
+      ).toBe(true);
     });
   });
 });
