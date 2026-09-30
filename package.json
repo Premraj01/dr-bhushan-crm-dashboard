@@ -1,0 +1,9 @@
+{
+  "name": "drb-crm-workspace",
+  "private": true,
+  "scripts": {
+    "dev": "cd frontend && npx vite --strictPort --host",
+    "build": "cd frontend && npm run build",
+    "build:dev": "cd frontend && npx vite build --mode development"
+  }
+}
