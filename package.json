@@ -1,0 +1,9 @@
+{
+  "name": "drb-crm-workspace",
+  "private": true,
+  "scripts": {
+    "dev": "npm run dev --prefix frontend -- --port 8080 --strictPort --host",
+    "build": "npm run build --prefix frontend",
+    "build:dev": "npm run build:dev --prefix frontend"
+  }
+}
