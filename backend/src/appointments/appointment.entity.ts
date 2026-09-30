@@ -34,6 +34,20 @@ export interface DispensedMedicine {
   unitPrice: number;
 }
 
+/** One medicine on a prescription (clinic stock or bought elsewhere). */
+export interface PrescribedItem {
+  name: string;
+  /** Inventory SKU when it's a product the clinic stocks. */
+  itemId?: string;
+  /** e.g. "1 tablet", "1 ml". */
+  dose?: string;
+  /** e.g. "Once daily (OD)". */
+  frequency?: string;
+  /** Absent = ongoing until stopped. */
+  durationDays?: number;
+  instructions?: string;
+}
+
 export interface Appointment extends Entity {
   /** Absent for walk-ins and first consultations that have no patient record yet. */
   patientId?: string;
@@ -58,6 +72,8 @@ export interface Appointment extends Entity {
   completedAt?: string | null;
   /** Medicines recommended and given at completion; taken out of inventory and billed. */
   medicines?: DispensedMedicine[] | null;
+  /** What the doctor prescribed at completion; recorded in the patient's history. */
+  prescription?: PrescribedItem[] | null;
   /**
    * Status of this visit's own bill (null/absent: not billed). Completing a chargeable
    * visit opens its bill as Pending, so a completed visit that isn't paid shows as pending.

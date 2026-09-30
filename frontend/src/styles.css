@@ -811,3 +811,45 @@ button.agenda-row:disabled{cursor:default}
 .history-flags svg{width:12px;flex:none}
 .history-consents{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
 @media (max-width:760px){.history-toolbar .segmented{grid-column:1/-1;overflow-x:auto}.history-toolbar .segmented button{white-space:nowrap}}
+
+/* Prescriptions */
+.complete-visit-dialog{max-width:min(760px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow-y:auto}
+.rx-rows{display:flex;flex-direction:column;gap:10px;margin:0;padding:0;list-style:none}
+.rx-rows>li:not(.medicine-total){display:flex;flex-direction:column;gap:10px;border:1px solid var(--border);border-radius:5px;background:var(--card);padding:12px}
+.rx-rows header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.rx-rows header strong,.rx-rows header small{display:block}
+.rx-rows header strong{font-size:12px}
+.rx-rows header small{margin-top:3px;color:var(--muted-foreground);font-size:10px}
+.rx-name{flex:1}
+.rx-fields{display:grid;grid-template-columns:1fr 1.3fr 1fr;gap:8px}
+.rx-fields label,.rx-name{display:flex;flex-direction:column;gap:5px;color:var(--muted-foreground);font:600 10px var(--font-heading)}
+.rx-fields input,.rx-fields select,.rx-name input{min-height:36px;border:1px solid var(--input);border-radius:5px;background:var(--background);padding:7px 9px;color:var(--foreground);font:400 12px var(--font-body);outline:0}
+.rx-fields input:focus,.rx-fields select:focus,.rx-name input:focus{border-color:var(--ring)}
+.rx-instructions{grid-column:1/-1}
+.rx-give{display:grid;grid-template-columns:minmax(0,1fr) auto 70px;align-items:center;gap:10px;border-top:1px dashed var(--border);padding-top:10px;font-size:11px}
+.rx-give b{text-align:right}
+.rx-list{display:flex;flex-direction:column;gap:10px}
+.rx-list article{display:flex;flex-direction:column;gap:10px;border:1px solid var(--border);border-radius:5px;background:var(--card);padding:14px}
+.rx-list article.inactive{background:var(--secondary)}
+.rx-list header{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px}
+.rx-list header strong,.rx-list header small{display:block}
+.rx-list header strong{font-size:12px}
+.rx-list header small{margin-top:3px;color:var(--muted-foreground);font-size:10px}
+.rx-list ul{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.rx-list li{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:start;gap:10px}
+.rx-list li>svg{width:15px;margin-top:1px;color:var(--primary)}
+.rx-list li strong{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:11px}
+.rx-list li small{display:block;margin-top:2px;color:var(--muted-foreground);font-size:10px}
+.rx-flag{display:inline-flex;align-items:center;gap:3px;color:var(--destructive);font-size:9px;font-weight:700}
+.rx-flag svg{width:11px}
+.rx-notes{margin:0;border-left:2px solid var(--border);padding-left:10px;font-size:11px}
+.rx-stopped{color:var(--muted-foreground);font-size:10px}
+.rx-list footer{display:flex;justify-content:flex-end}
+.rx-current{display:flex;flex-direction:column;gap:8px;border:1px solid color-mix(in oklab,var(--primary) 25%,var(--border));border-radius:5px;background:var(--teal-soft);padding:10px 12px}
+.rx-current>div{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.rx-current strong{font:700 11px var(--font-heading)}
+.rx-current ul{display:flex;flex-direction:column;gap:5px;margin:0;padding:0;list-style:none}
+.rx-current li{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 10px;font-size:11px}
+.rx-current em{color:var(--destructive);font-style:normal;font-weight:600}
+.rx-current small{color:var(--muted-foreground);font-size:10px}
+@media (max-width:760px){.rx-fields{grid-template-columns:1fr}.rx-give{grid-template-columns:1fr auto}.rx-give b{display:none}}

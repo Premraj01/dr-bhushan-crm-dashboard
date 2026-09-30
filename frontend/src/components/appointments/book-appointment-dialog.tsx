@@ -64,6 +64,7 @@ import {
 } from "./appointments-api";
 import { BillingSection } from "./billing-section";
 import { CompleteVisitDialog } from "./complete-visit-dialog";
+import { dosing } from "@/components/history/prescription-options";
 import { inrPrice } from "@/components/inventory/inventory-api";
 
 /** "current" keeps the appointment's patient as-is when editing (including walk-ins with no record). */
@@ -552,6 +553,20 @@ function AppointmentForm({
                       {m.name} <small>× {m.quantity}</small>
                     </span>
                     <b>{inrPrice.format(m.unitPrice * m.quantity)}</b>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {appointment.prescription && appointment.prescription.length > 0 && (
+            <div className="medicines-given">
+              <strong>Prescription</strong>
+              <ul>
+                {appointment.prescription.map((p, i) => (
+                  <li key={`${p.name}-${i}`}>
+                    <span>
+                      {p.name} <small>{dosing(p)}</small>
+                    </span>
                   </li>
                 ))}
               </ul>

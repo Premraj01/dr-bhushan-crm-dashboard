@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiBlob } from "@/lib/api";
 import { useLiveInvalidate } from "@/components/patients/patients-api";
+import type { PrescribedItem } from "@/components/appointments/appointments-api";
 
 /* ---------- medical history & clinical baseline ---------- */
 
@@ -117,6 +118,32 @@ export type PatientHistory = {
   patientId: string;
   medical?: MedicalHistory & Edited;
   hair?: HairAssessment & Edited;
+  /** Medicines the clinic currently has the patient on (active prescriptions). */
+  prescribed: (PrescriptionItem & { prescriptionId: string })[];
+};
+
+/* ---------- prescriptions ---------- */
+
+export type PrescriptionItem = PrescribedItem & {
+  /** Given from clinic stock at the visit. */
+  dispensed?: number;
+  affectsBleeding: boolean;
+};
+
+export type Prescription = {
+  id: string;
+  patientId: string;
+  appointmentId?: string;
+  visit?: string;
+  prescribedBy: string;
+  prescribedAt: string;
+  items: PrescriptionItem[];
+  notes?: string;
+  stoppedAt?: string;
+  stoppedBy?: string;
+  active: boolean;
+  /** YYYY-MM-DD the longest course ends; absent when ongoing. */
+  endsOn?: string;
 };
 
 /* ---------- photos & documents ---------- */
@@ -392,20 +419,73 @@ export async function openFile(path: string) {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-/** Safety flags shown wherever the patient is opened. */
+export function usePrescriptions(patientId: string | null) {
+  const query = useQuery({
+    queryKey: ["prescriptions", patientId],
+    queryFn: () => api<Prescription[]>(`/patients/${patientId}/prescriptions`),
+    enabled: patientId !== null,
+    retry: 1,
+  });
+  useLiveInvalidate(
+    ["prescriptions", patientId],
+    ["prescription.created", "prescription.updated", "prescription.deleted"],
+  );
+  return query;
+}
+
+function useRefreshPrescriptions(patientId: string) {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: ["prescriptions", patientId] });
+    // Active medicines and safety alerts come with the history.
+    void queryClient.invalidateQueries({ queryKey: ["history"] });
+  };
+}
+
+export function useCreatePrescription(patientId: string) {
+  const refresh = useRefreshPrescriptions(patientId);
+  return useMutation({
+    mutationFn: (body: { items: PrescribedItem[]; notes?: string }) =>
+      api<Prescription>(`/patients/${patientId}/prescriptions`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: refresh,
+  });
+}
+
+export function useStopPrescription(patientId: string) {
+  const refresh = useRefreshPrescriptions(patientId);
+  return useMutation({
+    mutationFn: (id: string) => api<Prescription>(`/prescriptions/${id}/stop`, { method: "POST" }),
+    onSuccess: refresh,
+  });
+}
+
+/**
+ * Safety flags shown wherever the patient is opened. `recorded` is false when there is
+ * no medical history yet — prescribed blood thinners are still flagged.
+ */
 export function safetyAlerts(history: PatientHistory | undefined) {
-  const m = history?.medical;
-  if (!m) return null;
+  if (!history) return null;
+  const m = history.medical;
+  const prescribedBleeding = history.prescribed.filter((x) => x.affectsBleeding).map((x) => x.name);
   return {
-    allergies: m.allergies.map((a) =>
+    recorded: !!m,
+    allergies: (m?.allergies ?? []).map((a) =>
       a.severity === "Severe" ? `${a.substance} (severe)` : a.substance,
     ),
-    noKnownAllergies: m.noKnownAllergies,
-    bleeding: m.medications.filter((x) => x.affectsBleeding).map((x) => x.name),
-    infectious: m.conditions
+    noKnownAllergies: m?.noKnownAllergies ?? false,
+    bleeding: [
+      ...new Set([
+        ...(m?.medications ?? []).filter((x) => x.affectsBleeding).map((x) => x.name),
+        ...prescribedBleeding,
+      ]),
+    ],
+    infectious: (m?.conditions ?? [])
       .filter((c) => c.status === "Current" && INFECTIOUS.includes(c.name))
       .map((c) => c.name),
-    clearancePending: m.clearance === "Pending",
+    clearancePending: m?.clearance === "Pending",
   };
 }
 

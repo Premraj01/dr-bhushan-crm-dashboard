@@ -59,7 +59,7 @@ export class AppointmentsController {
   @Post(':id/complete')
   @HttpCode(200)
   complete(@Param('id') id: string, @Body() dto: CompleteAppointmentDto) {
-    return this.appointments.complete(id, dto.medicines);
+    return this.appointments.complete(id, dto.medicines, dto.prescription);
   }
 
   /** Undo "Mark completed": the visit goes back to Checked in. */

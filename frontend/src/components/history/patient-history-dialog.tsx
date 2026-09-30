@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Camera, FileSignature, HeartPulse, IndianRupee, ScanFace } from "lucide-react";
+import { Camera, FileSignature, HeartPulse, IndianRupee, Pill, ScanFace } from "lucide-react";
 import { Banner } from "@/components/crm-ui";
 import { usePatient } from "@/components/patients/patients-api";
 import {
@@ -17,10 +17,12 @@ import { HairForm } from "./hair-form";
 import { useDocuments, useHistory, usePhotos } from "./history-api";
 import { MedicalForm } from "./medical-form";
 import { PhotoVault } from "./photo-vault";
+import { PrescriptionsTab } from "./prescriptions-tab";
 import { SafetyStrip } from "./safety-strip";
 import { errorText } from "@/lib/api";
 
-export type HistoryTab = "medical" | "hair" | "photos" | "documents" | "financial";
+export type HistoryTab =
+  "medical" | "hair" | "prescriptions" | "photos" | "documents" | "financial";
 
 /** The patient's full record: medical baseline, hair assessment, photos, consents and billing. */
 export function PatientHistoryDialog({
@@ -93,6 +95,13 @@ export function PatientHistoryDialog({
                 <ScanFace />
                 Hair & treatment
               </TabsTrigger>
+              <TabsTrigger value="prescriptions">
+                <Pill />
+                Prescriptions
+                {history.data?.prescribed.length
+                  ? ` (${history.data.prescribed.length} active)`
+                  : ""}
+              </TabsTrigger>
               <TabsTrigger value="photos">
                 <Camera />
                 Photos{photos.data?.length ? ` (${photos.data.length})` : ""}
@@ -113,6 +122,8 @@ export function PatientHistoryDialog({
                   key={`${patientId}-${history.data.medical?.updatedAt ?? "new"}`}
                   patientId={patientId}
                   medical={history.data.medical}
+                  prescribed={history.data.prescribed}
+                  onOpenPrescriptions={() => setTab("prescriptions")}
                   canEdit={canEditClinical}
                   onSaved={() => notify("Medical history saved.")}
                 />
@@ -129,6 +140,13 @@ export function PatientHistoryDialog({
                   onSaved={() => notify("Hair assessment saved.")}
                 />
               )}
+            </TabsContent>
+            <TabsContent value="prescriptions">
+              <PrescriptionsTab
+                patientId={patientId}
+                canPrescribe={canEditClinical}
+                onNotice={notify}
+              />
             </TabsContent>
             <TabsContent value="photos">
               <PhotoVault

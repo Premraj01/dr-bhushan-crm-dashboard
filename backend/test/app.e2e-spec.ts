@@ -489,6 +489,101 @@ describe('CRM API (e2e)', () => {
       return t.toISOString().slice(0, 10);
     };
 
+    it('records a visit prescription in the patient history', async () => {
+      const patientId = await newPatient('Prescription Patient');
+      const visit = (
+        await bookVisit(patientId, 'Consultation', `${today()}T06:15:00+05:30`)
+      ).body as Apt;
+      await request(app.getHttpServer())
+        .post(`/api/appointments/${visit.id}/check-in`)
+        .set(authed())
+        .expect(200);
+      await request(app.getHttpServer())
+        .post(`/api/appointments/${visit.id}/complete`)
+        .set(authed())
+        .send({
+          medicines: [{ itemId: '8901234560011', quantity: 1 }],
+          prescription: [
+            {
+              name: 'Minoxidil 5% topical solution 60 ml',
+              itemId: '8901234560011',
+              frequency: 'Twice a week',
+              durationDays: 30,
+            },
+            {
+              name: 'Aspirin 75 mg',
+              dose: '1 tablet',
+              frequency: 'Once daily (OD)',
+            },
+          ],
+        })
+        .expect(200);
+
+      type Rx = {
+        id: string;
+        appointmentId?: string;
+        active: boolean;
+        prescribedBy: string;
+        items: { name: string; dispensed?: number; affectsBleeding: boolean }[];
+      };
+      const list = async () =>
+        (
+          await request(app.getHttpServer())
+            .get(`/api/patients/${patientId}/prescriptions`)
+            .set(authed())
+            .expect(200)
+        ).body as Rx[];
+      const [rx] = await list();
+      expect(rx).toMatchObject({
+        appointmentId: visit.id,
+        active: true,
+        prescribedBy: 'Dr. Bhushan Patil',
+        items: [
+          { dispensed: 1, affectsBleeding: false },
+          { name: 'Aspirin 75 mg', affectsBleeding: true },
+        ],
+      });
+      const history = await request(app.getHttpServer())
+        .get(`/api/patients/${patientId}/history`)
+        .set(authed())
+        .expect(200);
+      expect(
+        (history.body as { prescribed: { name: string }[] }).prescribed.map(
+          (i) => i.name,
+        ),
+      ).toContain('Aspirin 75 mg');
+
+      // Undoing completion withdraws the visit's prescription.
+      await request(app.getHttpServer())
+        .delete(`/api/appointments/${visit.id}/complete`)
+        .set(authed())
+        .expect(200);
+      expect(await list()).toHaveLength(0);
+
+      // Prescribing from the history: clinicians only; can be stopped.
+      const reception = (
+        await request(app.getHttpServer())
+          .post('/api/auth/demo')
+          .send({ role: 'Reception' })
+      ).body.accessToken as string;
+      const body = { items: [{ name: 'Finasteride 1 mg', frequency: 'OD' }] };
+      await request(app.getHttpServer())
+        .post(`/api/patients/${patientId}/prescriptions`)
+        .set({ Authorization: `Bearer ${reception}` })
+        .send(body)
+        .expect(403);
+      const created = await request(app.getHttpServer())
+        .post(`/api/patients/${patientId}/prescriptions`)
+        .set(authed())
+        .send(body)
+        .expect(201);
+      const stopped = await request(app.getHttpServer())
+        .post(`/api/prescriptions/${created.body.id}/stop`)
+        .set(authed())
+        .expect(200);
+      expect(stopped.body.active).toBe(false);
+    });
+
     it('seeds plans, and lets any role create one with repeat blocks', async () => {
       const list = await request(app.getHttpServer())
         .get('/api/treatment-plans')

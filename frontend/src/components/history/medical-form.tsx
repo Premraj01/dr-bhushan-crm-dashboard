@@ -13,8 +13,10 @@ import {
   type MedicalHistory,
   type Medication,
   type PastSurgery,
+  type PatientHistory,
 } from "./history-api";
 import { clean } from "./format";
+import { dosing } from "./prescription-options";
 import { FormSection, QuickPicks, Rows, SaveBar } from "./shared";
 
 const EMPTY: MedicalHistory = {
@@ -39,13 +41,18 @@ function toForm(m: (MedicalHistory & Edited) | undefined): MedicalHistory {
 export function MedicalForm({
   patientId,
   medical,
+  prescribed,
   canEdit,
   onSaved,
+  onOpenPrescriptions,
 }: {
   patientId: string;
   medical: (MedicalHistory & Edited) | undefined;
+  /** Active prescriptions from the clinic — shown read-only above the patient's own list. */
+  prescribed: PatientHistory["prescribed"];
   canEdit: boolean;
   onSaved: () => void;
+  onOpenPrescriptions: () => void;
 }) {
   const save = useSaveMedical(patientId);
   const [form, setForm] = useState(() => toForm(medical));
@@ -208,6 +215,28 @@ export function MedicalForm({
           title="Current medications & supplements"
           hint="Tick “Affects bleeding” for blood thinners and supplements that affect bleeding or healing."
         >
+          {prescribed.length > 0 && (
+            <div className="rx-current">
+              <div>
+                <strong>Prescribed by the clinic</strong>
+                <button type="button" className="link-reset" onClick={onOpenPrescriptions}>
+                  All prescriptions
+                </button>
+              </div>
+              <ul>
+                {prescribed.map((i) => (
+                  <li key={`${i.prescriptionId}-${i.name}`}>
+                    <span>
+                      {i.name}
+                      {i.affectsBleeding && <em> · affects bleeding</em>}
+                    </span>
+                    <small>{dosing(i)}</small>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <p className="field-note m-0">Medicines the patient takes from elsewhere:</p>
           <Rows<Medication>
             items={form.medications}
             onChange={(v) => set("medications", v)}

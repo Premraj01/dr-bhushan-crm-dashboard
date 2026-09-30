@@ -25,6 +25,8 @@ import { MAX_UPLOAD_BYTES, type UploadedFileLike } from './file-store.service';
 import { HistoryOverviewService } from './history-overview.service';
 import { HistoryService } from './history.service';
 import { PhotosService } from './photos.service';
+import { PrescriptionsService } from './prescriptions.service';
+import { CreatePrescriptionDto } from './dto/prescription.dto';
 
 const upload = FileInterceptor('file', {
   limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
@@ -66,6 +68,7 @@ export class PatientHistoryController {
     private readonly history: HistoryService,
     private readonly photos: PhotosService,
     private readonly documents: DocumentsService,
+    private readonly prescriptions: PrescriptionsService,
   ) {}
 
   @Get('history')
@@ -92,6 +95,22 @@ export class PatientHistoryController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.history.setHair(id, dto, user);
+  }
+
+  @Get('prescriptions')
+  listPrescriptions(@Param('id') id: string) {
+    return this.prescriptions.list(id);
+  }
+
+  /** Prescribing outside a visit (refill, teleconsultation) — clinicians only. */
+  @Post('prescriptions')
+  @Roles('Admin', 'Doctor')
+  prescribe(
+    @Param('id') id: string,
+    @Body() dto: CreatePrescriptionDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.prescriptions.create(id, dto, user);
   }
 
   @Get('photos')
@@ -170,5 +189,20 @@ export class DocumentsController {
   @HttpCode(204)
   remove(@Param('id') id: string) {
     this.documents.remove(id);
+  }
+}
+
+@ApiTags('patient history')
+@ApiBearerAuth()
+@Controller('prescriptions')
+export class PrescriptionsController {
+  constructor(private readonly prescriptions: PrescriptionsService) {}
+
+  /** A doctor stops the medicines early. The prescription stays on record. */
+  @Post(':id/stop')
+  @Roles('Admin', 'Doctor')
+  @HttpCode(200)
+  stop(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.prescriptions.stop(id, user);
   }
 }

@@ -7,7 +7,7 @@ import { safetyAlerts, type PatientHistory } from "./history-api";
  */
 export function SafetyStrip({ history }: { history: PatientHistory | undefined }) {
   const alerts = safetyAlerts(history);
-  if (!alerts) {
+  if (!alerts || (!alerts.recorded && alerts.bleeding.length === 0)) {
     return (
       <p className="safety-strip safety-unknown">
         <AlertTriangle />
@@ -37,6 +37,13 @@ export function SafetyStrip({ history }: { history: PatientHistory | undefined }
       text: "Medical clearance pending",
     },
   ].filter((x) => !!x);
+  if (!alerts.recorded) {
+    items.push({
+      icon: AlertTriangle,
+      tone: "warning",
+      text: "Medical history not recorded — check allergies before any procedure",
+    });
+  }
   if (items.length === 0) {
     return (
       <p className="safety-strip safety-ok">

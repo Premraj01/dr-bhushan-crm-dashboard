@@ -206,3 +206,56 @@ export interface PatientDocument extends Entity {
   revokedAt?: string;
   revokedBy?: { id: string; name: string };
 }
+
+/* ---------- prescriptions ---------- */
+
+/**
+ * Blood thinners and supplements that affect bleeding, matched by name so a
+ * prescription can raise the same safety alert as the medical history.
+ */
+export const BLEEDING_RISK = [
+  'aspirin',
+  'warfarin',
+  'clopidogrel',
+  'apixaban',
+  'rivaroxaban',
+  'dabigatran',
+  'ibuprofen',
+  'diclofenac',
+  'naproxen',
+  'fish oil',
+  'omega-3',
+  'vitamin e',
+  'ginkgo',
+  'garlic',
+];
+
+export interface PrescriptionItem {
+  name: string;
+  itemId?: string;
+  dose?: string;
+  frequency?: string;
+  /** Absent = ongoing until stopped. */
+  durationDays?: number;
+  instructions?: string;
+  /** Given from clinic stock at the visit. */
+  dispensed?: number;
+  affectsBleeding: boolean;
+}
+
+/** Medicines a doctor prescribed — at a visit, or from the patient's history. */
+export interface Prescription extends Entity {
+  patientId: string;
+  /** The visit it was written at; absent when prescribed from the history. */
+  appointmentId?: string;
+  /** e.g. "PRP Session 3", "Follow-up". */
+  visit?: string;
+  prescribedBy: string;
+  /** ISO */
+  prescribedAt: string;
+  items: PrescriptionItem[];
+  notes?: string;
+  /** Stopped early by a doctor. */
+  stoppedAt?: string;
+  stoppedBy?: string;
+}

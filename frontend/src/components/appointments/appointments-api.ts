@@ -42,6 +42,19 @@ export type Appointment = {
   billStatus?: "Paid" | "Partially paid" | "Pending" | "Overdue" | "Cancelled" | null;
   /** Medicines given when the visit was completed (taken out of inventory and billed). */
   medicines?: DispensedMedicine[] | null;
+  /** What the doctor prescribed at completion (also recorded in the patient's history). */
+  prescription?: PrescribedItem[] | null;
+};
+
+/** One medicine on a prescription — clinic stock (`itemId`) or bought elsewhere. */
+export type PrescribedItem = {
+  name: string;
+  itemId?: string;
+  dose?: string;
+  frequency?: string;
+  /** Absent = ongoing until stopped. */
+  durationDays?: number;
+  instructions?: string;
 };
 
 export type DispensedMedicine = {
@@ -116,6 +129,8 @@ export function useAppointmentStatus() {
     void queryClient.invalidateQueries({ queryKey: ["packages"] }); // progress, auto-complete
     void queryClient.invalidateQueries({ queryKey: ["billing"] }); // completing opens the visit's bill
     void queryClient.invalidateQueries({ queryKey: ["inventory"] }); // medicines given / returned
+    void queryClient.invalidateQueries({ queryKey: ["prescriptions"] }); // recorded in history
+    void queryClient.invalidateQueries({ queryKey: ["history"] });
   };
   const checkIn = useMutation({
     mutationFn: ({ id, undo }: { id: string; undo?: boolean }) =>
@@ -123,10 +138,21 @@ export function useAppointmentStatus() {
     onSuccess: refresh,
   });
   const complete = useMutation({
-    mutationFn: ({ id, medicines = [] }: { id: string; medicines?: MedicineRequest[] }) =>
+    mutationFn: ({
+      id,
+      medicines = [],
+      prescription = [],
+    }: {
+      id: string;
+      medicines?: MedicineRequest[];
+      prescription?: PrescribedItem[];
+    }) =>
       api<Appointment>(`/appointments/${id}/complete`, {
         method: "POST",
-        body: JSON.stringify(medicines.length ? { medicines } : {}),
+        body: JSON.stringify({
+          ...(medicines.length && { medicines }),
+          ...(prescription.length && { prescription }),
+        }),
       }),
     onSuccess: refresh,
   });

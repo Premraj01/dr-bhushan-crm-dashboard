@@ -20,7 +20,10 @@ import {
   Appointment,
   DispensedMedicine,
 } from './appointment.entity';
-import { DispenseMedicineDto } from './dto/complete-appointment.dto';
+import {
+  DispenseMedicineDto,
+  PrescribedItemDto,
+} from './dto/complete-appointment.dto';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { ListAppointmentsQuery } from './dto/list-appointments.query';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
@@ -220,10 +223,15 @@ export class AppointmentsService
   }
 
   /**
-   * Visit done. Only after the patient has been checked in. Medicines the doctor
-   * recommended are taken out of inventory and added to the visit's bill.
+   * Visit done. Only after the patient has been checked in. Medicines given from
+   * clinic stock are taken out of inventory and added to the visit's bill; the
+   * prescription is kept on the visit and recorded in the patient's history.
    */
-  complete(id: string, medicines: DispenseMedicineDto[] = []): Appointment {
+  complete(
+    id: string,
+    medicines: DispenseMedicineDto[] = [],
+    prescription: PrescribedItemDto[] = [],
+  ): Appointment {
     const a = this.findOne(id);
     if (a.status !== 'Checked in') {
       throw new BadRequestException(
@@ -237,6 +245,9 @@ export class AppointmentsService
       status: 'Completed',
       completedAt: new Date().toISOString(),
       ...(dispensed.length > 0 && { medicines: dispensed }),
+      ...(prescription.length > 0 && {
+        prescription: prescription.map((p) => ({ ...p })),
+      }),
     });
     // Lets PackagesService close packages whose every step is done.
     this.events.emit(APPOINTMENT_COMPLETED, done);
@@ -266,6 +277,7 @@ export class AppointmentsService
       status: 'Checked in',
       completedAt: null,
       medicines: null,
+      prescription: null,
     });
     // Lets PackagesService reopen a package this visit had completed.
     this.events.emit(APPOINTMENT_REOPENED, reopened);

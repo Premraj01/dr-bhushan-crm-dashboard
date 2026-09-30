@@ -6,7 +6,7 @@ import { Invoice } from '../invoices/invoice.entity';
 import { Payment } from '../invoices/payment.entity';
 import { TreatmentPlan } from '../plans/plan.entity';
 import { Lead } from '../leads/lead.entity';
-import { PatientHistory } from '../history/history.entity';
+import { PatientHistory, Prescription } from '../history/history.entity';
 import { Patient } from '../patients/patient.entity';
 import { Treatment } from '../treatments/treatment.entity';
 import { User } from '../users/user.entity';
@@ -917,6 +917,113 @@ const demoHistories: SeedEntity<PatientHistory>[] = [
 
 export const seedPatients = demo(demoPatients);
 export const seedHistories = demo(demoHistories);
+
+const demoPrescriptions: SeedEntity<Prescription>[] = [
+  {
+    id: 'RX-1',
+    patientId: 'PT-1079',
+    visit: 'FUE surgery — discharge',
+    prescribedBy: 'Dr. Bhushan Patil',
+    prescribedAt: ist('2025-09-08T18:30:00'),
+    createdAt: ist('2025-09-08T18:30:00'),
+    items: [
+      {
+        name: 'Cefuroxime 500 mg',
+        dose: '1 tablet',
+        frequency: 'Twice daily (BD)',
+        durationDays: 5,
+        instructions: 'After food',
+        affectsBleeding: false,
+      },
+      {
+        name: 'Prednisolone 20 mg',
+        dose: '1 tablet',
+        frequency: 'Once daily (OD)',
+        durationDays: 3,
+        instructions: 'Morning, after breakfast — for forehead swelling',
+        affectsBleeding: false,
+      },
+      {
+        name: 'Paracetamol 650 mg',
+        dose: '1 tablet',
+        frequency: 'As needed (SOS)',
+        durationDays: 5,
+        instructions: 'For pain; max 3 a day. Avoid ibuprofen and aspirin.',
+        affectsBleeding: false,
+      },
+      {
+        name: 'Saline spray',
+        dose: '4–5 sprays',
+        frequency: 'Every 2 hours',
+        durationDays: 3,
+        instructions: 'On the grafts while awake',
+        affectsBleeding: false,
+      },
+    ],
+    notes: 'Sleep at 45° for 3 nights. First wash at clinic on day 1.',
+  },
+  {
+    id: 'RX-2',
+    patientId: 'PT-1079',
+    visit: '1-month review',
+    prescribedBy: 'Dr. Bhushan Patil',
+    prescribedAt: ist('2025-10-08T12:10:00'),
+    createdAt: ist('2025-10-08T12:10:00'),
+    items: [
+      {
+        name: 'Finasteride 1 mg',
+        dose: '1 tablet',
+        frequency: 'Once daily (OD)',
+        instructions: 'Long term, to protect the crown and native hair',
+        affectsBleeding: false,
+      },
+      {
+        name: 'Minoxidil 5% solution',
+        dose: '1 ml',
+        frequency: 'Twice daily (BD)',
+        durationDays: 180,
+        instructions: 'Apply to the whole top of the scalp on dry hair',
+        affectsBleeding: false,
+      },
+    ],
+  },
+  {
+    id: 'RX-3',
+    patientId: 'PT-1084',
+    visit: 'PRP Session 1',
+    prescribedBy: 'Dr. Sonal Desai',
+    prescribedAt: ist('2026-07-24T11:00:00'),
+    createdAt: ist('2026-07-24T11:00:00'),
+    items: [
+      {
+        name: 'Minoxidil 2% solution',
+        dose: '1 ml',
+        frequency: 'Twice daily (BD)',
+        durationDays: 180,
+        instructions: 'Along the parting line; wash hands after',
+        affectsBleeding: false,
+      },
+      {
+        name: 'Biotin 10 mg',
+        dose: '1 tablet',
+        frequency: 'Once daily (OD)',
+        durationDays: 60,
+        affectsBleeding: false,
+      },
+      {
+        name: 'Ketoconazole 2% anti-dandruff shampoo 100 ml',
+        itemId: '8901234560042',
+        dose: 'Lather 5 minutes',
+        frequency: 'Twice a week',
+        durationDays: 60,
+        dispensed: 1,
+        affectsBleeding: false,
+      },
+    ],
+  },
+];
+
+export const seedPrescriptions = demo(demoPrescriptions);
 export const seedAppointments = demo(demoAppointments);
 export const seedTreatments = demo(demoTreatments);
 export const seedInvoices = demo(demoInvoices);

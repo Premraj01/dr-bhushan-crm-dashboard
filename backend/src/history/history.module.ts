@@ -5,12 +5,14 @@ import { FileStore } from './file-store.service';
 import {
   DocumentsController,
   HistoryOverviewController,
+  PrescriptionsController,
   PatientHistoryController,
   PhotosController,
 } from './history.controller';
 import { HistoryOverviewService } from './history-overview.service';
 import { HistoryService } from './history.service';
 import { PhotosService } from './photos.service';
+import { PrescriptionsService } from './prescriptions.service';
 
 @Module({
   imports: [PatientsModule],
@@ -19,6 +21,7 @@ import { PhotosService } from './photos.service';
     PhotosController,
     DocumentsController,
     HistoryOverviewController,
+    PrescriptionsController,
   ],
   providers: [
     FileStore,
@@ -26,6 +29,7 @@ import { PhotosService } from './photos.service';
     HistoryOverviewService,
     PhotosService,
     DocumentsService,
+    PrescriptionsService,
   ],
 })
 export class HistoryModule {}

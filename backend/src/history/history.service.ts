@@ -7,6 +7,7 @@ import { seedHistories } from '../seed/seed-data';
 import { HairAssessmentDto } from './dto/hair-assessment.dto';
 import { MedicalHistoryDto } from './dto/medical-history.dto';
 import { HAIR_GRADES, PatientHistory } from './history.entity';
+import { PrescriptionsService } from './prescriptions.service';
 
 /** Medical baseline and hair assessment, one record per patient (id = patient id). */
 @Injectable()
@@ -14,16 +15,21 @@ export class HistoryService extends CrudService<PatientHistory> {
   constructor(
     events: EventEmitter2,
     private readonly patients: PatientsService,
+    private readonly prescriptions: PrescriptionsService,
   ) {
     super(events, 'history', 'HX-', seedHistories());
   }
 
-  get(
-    patientId: string,
-  ): Pick<PatientHistory, 'patientId' | 'medical' | 'hair'> {
+  /** Includes what the clinic currently has the patient on (from prescriptions). */
+  get(patientId: string) {
     this.patients.findOne(patientId);
     const { medical, hair } = this.repo.findOne(patientId) ?? {};
-    return { patientId, medical, hair };
+    return {
+      patientId,
+      medical,
+      hair,
+      prescribed: this.prescriptions.activeItems(patientId),
+    };
   }
 
   setMedical(patientId: string, dto: MedicalHistoryDto, user: AuthUser) {

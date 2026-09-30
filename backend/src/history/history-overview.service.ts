@@ -46,7 +46,7 @@ export class HistoryOverviewService {
     const photos = this.photos.findAll();
     const docs = this.documents.findAll();
     return this.patients.list({}).map((p) => {
-      const { medical, hair } = this.history.get(p.id);
+      const { medical, hair, prescribed } = this.history.get(p.id);
       const own = photos.filter((x) => x.patientId === p.id);
       const ownDocs = docs
         .filter((d) => d.patientId === p.id)
@@ -74,10 +74,14 @@ export class HistoryOverviewService {
         medicalRecorded: !!medical,
         ...(hair && { hairGrade: `${hair.scale} ${hair.grade}` }),
         allergies: medical?.allergies.map((a) => a.substance) ?? [],
-        bleedingRisk:
-          medical?.medications
-            .filter((m) => m.affectsBleeding)
-            .map((m) => m.name) ?? [],
+        bleedingRisk: [
+          ...new Set([
+            ...(medical?.medications ?? [])
+              .filter((m) => m.affectsBleeding)
+              .map((m) => m.name),
+            ...prescribed.filter((m) => m.affectsBleeding).map((m) => m.name),
+          ]),
+        ],
         infectious:
           medical?.conditions
             .filter((c) => c.status === 'Current' && INFECTIOUS.has(c.name))
