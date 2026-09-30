@@ -896,6 +896,22 @@ describe('CRM API (e2e)', () => {
       expect(consult.packageId).toBeUndefined();
     });
 
+    it('only books surgery from a package, never as a normal appointment', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/appointments')
+        .set(authed())
+        .send({
+          patientId: 'PT-1082',
+          type: 'FUE hair transplant',
+          doctor: 'Dr. Bhushan Patil',
+          startsAt: '2027-03-10T10:00:00+05:30',
+        })
+        .expect(400);
+      expect((res.body as { message: string }).message).toMatch(/package/i);
+      // PRP and other visits still book normally
+      await bookVisit('PT-1082', 'PRP session', '2027-03-10T11:00:00+05:30');
+    });
+
     it('books a surgery over 1–3 days, blocking the theatre but not OPD', async () => {
       const a = await newPatient('Surgery A');
       const b = await newPatient('Surgery B');

@@ -8,6 +8,7 @@ import {
   IndianRupee,
   Lock,
   LoaderCircle,
+  PackagePlus,
   Undo2,
   UserPlus,
   UserRound,
@@ -68,7 +69,8 @@ import {
   type Appointment,
 } from "./appointments-api";
 import { BillingSection } from "./billing-section";
-import { CompleteVisitDialog } from "./complete-visit-dialog";
+import { CompleteVisitDialog, type Assessment } from "./complete-visit-dialog";
+import { usePlans } from "@/components/plans/plans-api";
 import { dosing } from "@/components/history/prescription-options";
 import { inrPrice } from "@/components/inventory/inventory-api";
 import { SelectInput } from "@/components/form/select-input";
@@ -112,6 +114,7 @@ export function AppointmentDialog({
   onOpenPatient,
   onPaymentReceived,
   onBookNext,
+  onCreatePackage,
 }: {
   open: boolean;
   appointment?: Appointment | null | undefined;
@@ -126,8 +129,16 @@ export function AppointmentDialog({
   /** "Book next" after a plan visit is completed: opens the booking for the plan's next step. */
   onBookNext?:
     ((next: { patientId: string; packageId: string; index: number }) => void) | undefined;
+  /** After a consultation: open the package builder for this patient, starting from the plan. */
+  onCreatePackage?: ((patientId: string, planId: string) => void) | undefined;
 }) {
   const editing = !!appointment;
+  const { data: plans } = usePlans();
+  // The plan the doctor recommended when completing a consultation, if any.
+  const [recommended, setRecommended] = useState<{ patientId: string; planId: string } | null>(
+    null,
+  );
+  const recommendedPlan = recommended && plans?.find((p) => p.id === recommended.planId);
   // "details" = the appointment form; "billing" = payment details + receive payment.
   const [view, setView] = useState<"details" | "billing">("details");
   const [paidMessage, setPaidMessage] = useState<string | null>(null);
@@ -138,6 +149,7 @@ export function AppointmentDialog({
     setLastKey(key);
     setView("details");
     setPaidMessage(null);
+    setRecommended(null);
   }
   const billing = view === "billing" && appointment;
   return (
@@ -186,6 +198,24 @@ export function AppointmentDialog({
                 </Banner>
               </div>
             )}
+            {recommended && recommendedPlan && onCreatePackage && (
+              <div className="next-visit">
+                <PackagePlus />
+                <div className="min-w-0">
+                  <strong>Recommended: {recommendedPlan.name}</strong>
+                  <small>
+                    Create the package now, or later from the patient’s record. Surgery in it goes
+                    to Pending bookings.
+                  </small>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => onCreatePackage(recommended.patientId, recommended.planId)}
+                >
+                  Create package
+                </Button>
+              </div>
+            )}
             <BillingSection
               target={{ appointment }}
               onBack={() => {
@@ -211,13 +241,20 @@ export function AppointmentDialog({
             onSessionBooked={onSessionBooked}
             onOpenPatient={onOpenPatient}
             onReceivePayment={() => setView("billing")}
-            onCompleted={(a) => {
+            onCompleted={(a, assessment) => {
               // Visit done → straight to payment.
               const given = a.medicines?.length ?? 0;
               setPaidMessage(
-                given
-                  ? `Visit marked completed and ${given} medicine${given > 1 ? "s" : ""} taken out of inventory. Receive the payment below.`
-                  : "Visit marked completed. Receive the payment below.",
+                (given
+                  ? `Visit marked completed and ${given} medicine${given > 1 ? "s" : ""} taken out of inventory.`
+                  : "Visit marked completed.") +
+                  (assessment?.concern ? ` Concern recorded: ${assessment.concern}.` : "") +
+                  " Receive the payment below.",
+              );
+              setRecommended(
+                assessment?.planId && a.patientId
+                  ? { patientId: a.patientId, planId: assessment.planId }
+                  : null,
               );
               setView("billing");
               onPaymentReceived?.(`${a.patientName}’s ${a.type} marked completed.`);
@@ -248,7 +285,7 @@ function AppointmentForm({
   onSessionBooked?: ((pkg: TreatmentPackage, index: number) => void) | undefined;
   onOpenPatient?: ((id: string) => void) | undefined;
   onReceivePayment?: (() => void) | undefined;
-  onCompleted?: ((appointment: Appointment) => void) | undefined;
+  onCompleted?: ((appointment: Appointment, assessment?: Assessment) => void) | undefined;
 }) {
   const editing = appointment !== undefined;
   const sessionStep = session?.pkg.steps[session.index];
@@ -589,9 +626,9 @@ function AppointmentForm({
               appointment={appointment}
               open={completing}
               onOpenChange={setCompleting}
-              onCompleted={(done) => {
+              onCompleted={(done, assessment) => {
                 setCompleting(false);
-                onCompleted(done);
+                onCompleted(done, assessment);
               }}
             />
           )}
@@ -620,7 +657,7 @@ function AppointmentForm({
                 <Lock className="picker-chevron" />
               </div>
             ) : (
-              <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+              <Popover modal open={pickerOpen} onOpenChange={setPickerOpen}>
                 <PopoverTrigger asChild>
                   <button
                     type="button"
@@ -818,11 +855,27 @@ function AppointmentForm({
               disabled={!!session}
               onChange={(e) => setTreatmentName(e.target.value)}
             >
-              {[...new Set([treatmentName, ...activeTreatments.map((t) => t.name)])].map((n) => (
+              {/* Surgery is only booked from a package, so it isn't offered here
+                  (an existing surgery keeps its own name as the current value). */}
+              {[
+                ...new Set([
+                  treatmentName,
+                  ...activeTreatments.filter((t) => !t.surgical).map((t) => t.name),
+                ]),
+              ].map((n) => (
                 <option key={n}>{n}</option>
               ))}
             </SelectInput>
-            {prpHint && <small className="treatment-hint">{prpHint}</small>}
+            {prpHint ? (
+              <small className="treatment-hint">{prpHint}</small>
+            ) : (
+              !appointment &&
+              !session && (
+                <small className="field-note">
+                  Surgery is booked from the patient’s package (Pending bookings).
+                </small>
+              )
+            )}
           </label>
           <label>
             Doctor

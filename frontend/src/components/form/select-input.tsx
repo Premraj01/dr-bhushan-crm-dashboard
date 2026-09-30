@@ -136,7 +136,7 @@ export function SelectInput({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className={cn("picker-popover select-popover p-0", popoverClassName)}
+        className={cn("field-popover select-popover p-0", popoverClassName)}
         onOpenAutoFocus={(e) => {
           if (!searchable) {
             e.preventDefault();

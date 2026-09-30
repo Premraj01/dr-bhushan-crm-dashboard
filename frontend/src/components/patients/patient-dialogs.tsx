@@ -30,6 +30,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { errorText } from "@/lib/api";
 import { initials } from "@/lib/mock-auth";
 import { cn } from "@/lib/utils";
+import {
+  clinicDateOf,
+  useCompletedVisits,
+  type Appointment,
+} from "@/components/appointments/appointments-api";
 import { DateInput } from "@/components/form/date-input";
 import { PhoneInput } from "@/components/form/phone-input";
 import { ValidatedForm } from "@/components/form/validated-form";
@@ -90,6 +95,7 @@ export function PatientProfileDialog({
   const { data: patient, isPending } = usePatient(patientId);
   const { data: history, isSuccess: historyLoaded } = useHistory(patientId);
   const { data: packages } = usePackages(patientId);
+  const { data: completedVisits } = useCompletedVisits(patientId);
   const next = upcomingVisits(packages ?? [])[0];
 
   return (
@@ -150,7 +156,11 @@ export function PatientProfileDialog({
               )}
             </div>
             <PersonalDetails patient={patient} />
-            <TreatmentTimeline patient={patient} packages={packages ?? []} />
+            <TreatmentTimeline
+              patient={patient}
+              packages={packages ?? []}
+              visits={completedVisits ?? []}
+            />
             <PackageList
               patientId={patient.id}
               canManage={canCreatePackages}
@@ -255,13 +265,19 @@ function currentIndex(entries: TimelineEntry[]): number {
 function TreatmentTimeline({
   patient,
   packages,
+  visits,
 }: {
   patient: Patient;
   packages: TreatmentPackage[];
+  /** Completed appointments; package ones already show as their package step. */
+  visits: Appointment[];
 }) {
   const today = clinicToday();
+  const ownVisits = visits.filter((a) => !a.packageId);
+  const visitDays = new Set(visits.map((a) => clinicDateOf(a.startsAt)));
   const entries: TimelineEntry[] = [
-    ...(patient.lastVisit
+    // The last check-in only stands in for a visit that isn't listed below.
+    ...(patient.lastVisit && !visitDays.has(patient.lastVisit)
       ? [
           {
             date: patient.lastVisit,
@@ -271,6 +287,12 @@ function TreatmentTimeline({
           },
         ]
       : []),
+    ...ownVisits.map((a): TimelineEntry => ({
+      date: clinicDateOf(a.startsAt),
+      title: a.type,
+      caption: `Completed · ${a.doctor}`,
+      tone: "done",
+    })),
     ...packages.map((p): TimelineEntry => ({
       date: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(
         new Date(p.createdAt),
@@ -510,7 +532,8 @@ export function EditPatientDialog({
   onNotice,
   onPackageCreated,
 }: {
-  editing: { id: string; tab: EditTab } | null;
+  /** `planId` pre-selects that plan in the package builder (after a consultation). */
+  editing: { id: string; tab: EditTab; planId?: string } | null;
   canCreatePackages: boolean;
   onOpenChange: (open: boolean) => void;
   onNotice: (message: string) => void;
@@ -561,8 +584,9 @@ export function EditPatientDialog({
             <TabsContent value="package">
               {canCreatePackages ? (
                 <PackageBuilder
-                  key={patient.id}
+                  key={`${patient.id}-${editing?.planId ?? ""}`}
                   patient={patient}
+                  initialPlanId={editing?.planId}
                   onCancel={() => onOpenChange(false)}
                   onCreated={(pkg) => {
                     onOpenChange(false);
@@ -948,10 +972,13 @@ export function AddPatientDialog({
 
 function PackageBuilder({
   patient,
+  initialPlanId,
   onCancel,
   onCreated,
 }: {
   patient: Patient;
+  /** Start from this plan, e.g. the one recommended at the consultation. */
+  initialPlanId?: string | undefined;
   onCancel: () => void;
   onCreated: (pkg: TreatmentPackage) => void;
 }) {
@@ -960,6 +987,16 @@ function PackageBuilder({
   const create = useCreatePackage(patient.id);
   const [planId, setPlanId] = useState("");
   const [items, setItems] = useState<PlanItem[]>([]);
+  // Apply the recommended plan once the plans have loaded.
+  const [seeded, setSeeded] = useState(!initialPlanId);
+  if (!seeded && plans) {
+    setSeeded(true);
+    const chosen = plans.find((p) => p.id === initialPlanId);
+    if (chosen) {
+      setPlanId(chosen.id);
+      setItems(structuredClone(chosen.items));
+    }
+  }
   const [startDate, setStartDate] = useState(clinicToday());
   const [notes, setNotes] = useState("");
 

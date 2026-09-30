@@ -90,6 +90,7 @@ export function AppointmentsView({
   onStartScheduling,
   onEndScheduling,
   onOpenPatient,
+  onCreatePackage,
   onNotice,
 }: {
   /** When set, a panel lists this package's sessions to book into the calendar. */
@@ -98,6 +99,8 @@ export function AppointmentsView({
   onStartScheduling?: ((s: Scheduling) => void) | undefined;
   onEndScheduling?: (() => void) | undefined;
   onOpenPatient: (id: string) => void;
+  /** Opens the package builder for a patient, starting from a plan (after a consultation). */
+  onCreatePackage?: ((patientId: string, planId: string) => void) | undefined;
   onNotice: (message: string) => void;
 }) {
   const today = clinicToday();
@@ -499,6 +502,13 @@ export function AppointmentsView({
       </div>
       <AppointmentDialog
         open={dialog !== null}
+        onCreatePackage={
+          onCreatePackage &&
+          ((patientId, planId) => {
+            setDialog(null);
+            onCreatePackage(patientId, planId);
+          })
+        }
         appointment={editingNow}
         session={dialog && dialog !== "new" && "session" in dialog ? dialog.session : null}
         onSessionBooked={(updated, index) => {

@@ -107,7 +107,7 @@ export function DateInput({
           </PopoverTrigger>
         </span>
       </PopoverAnchor>
-      <PopoverContent align="start" className="picker-popover p-0">
+      <PopoverContent align="start" className="field-popover p-0">
         <Calendar
           mode="single"
           className="themed-calendar"

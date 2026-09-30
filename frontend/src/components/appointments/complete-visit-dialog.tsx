@@ -14,7 +14,10 @@ import {
   useInventory,
   type InventoryItem,
 } from "@/components/inventory/inventory-api";
-import { clinicToday } from "@/components/patients/patients-api";
+import { clinicToday, usePatient, useUpdatePatient } from "@/components/patients/patients-api";
+import { usePlans } from "@/components/plans/plans-api";
+import { useCatalog, type ConcernOption } from "@/components/settings/catalog-settings";
+import { SelectInput } from "@/components/form/select-input";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -34,6 +37,16 @@ import { ValidatedForm } from "@/components/form/validated-form";
  * many are handed over now from stock (0 = the patient buys it elsewhere).
  */
 type Row = { key: number; rx: RxDraft; item?: InventoryItem; give: number };
+
+/** Visits where the doctor assesses the patient: set the concern, maybe recommend a plan. */
+const ASSESSMENT_VISITS = new Set(["consultation", "hair analysis"]);
+
+export function isAssessmentVisit(a: Pick<Appointment, "type" | "patientId" | "packageId">) {
+  return !!a.patientId && !a.packageId && ASSESSMENT_VISITS.has(a.type.trim().toLowerCase());
+}
+
+/** What the doctor decided at the consultation. */
+export type Assessment = { concern: string; planId: string | null };
 
 /** Why a product can't be given right now, if it can't. */
 function unavailable(item: InventoryItem, today: string): string | null {
@@ -56,7 +69,7 @@ export function CompleteVisitDialog({
   appointment: Appointment;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCompleted: (appointment: Appointment) => void;
+  onCompleted: (appointment: Appointment, assessment?: Assessment) => void;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -82,9 +95,26 @@ function CompleteVisitForm({
 }: {
   appointment: Appointment;
   onCancel: () => void;
-  onCompleted: (appointment: Appointment) => void;
+  onCompleted: (appointment: Appointment, assessment?: Assessment) => void;
 }) {
   const today = clinicToday();
+  const assessing = isAssessmentVisit(appointment);
+  const { data: patient } = usePatient(appointment.patientId ?? null);
+  const { data: concerns } = useCatalog<ConcernOption>("concerns");
+  const { data: plans } = usePlans();
+  const updatePatient = useUpdatePatient(appointment.patientId ?? "");
+  const [concern, setConcern] = useState<string | null>(null);
+  const [planId, setPlanId] = useState("");
+  // Starts on the concern already on record; the doctor confirms or changes it.
+  const chosenConcern = concern ?? patient?.concern ?? "";
+  const concernNames = [
+    ...new Set(
+      [...(concerns ?? []).filter((c) => c.active).map((c) => c.name), patient?.concern].filter(
+        (c): c is string => !!c,
+      ),
+    ),
+  ];
+  const activePlans = (plans ?? []).filter((p) => p.active);
   const { data: products, isPending, isError } = useInventory();
   const { complete } = useAppointmentStatus();
   const [rows, setRows] = useState<Row[]>([]);
@@ -146,7 +176,20 @@ function CompleteVisitForm({
         medicines: given.map((r) => ({ itemId: r.item!.id, quantity: r.give })),
         prescription: rows.map((r) => toPrescribed(r.rx)),
       },
-      { onSuccess: (done) => onCompleted(done) },
+      {
+        onSuccess: (done) => {
+          if (!assessing) return onCompleted(done);
+          const assessment = { concern: chosenConcern, planId: planId || null };
+          // The concern goes on the patient's record; the visit is already completed,
+          // so a failure here only loses the concern, which can be set from the record.
+          if (chosenConcern && chosenConcern !== patient?.concern) {
+            updatePatient.mutate(
+              { concern: chosenConcern },
+              { onSettled: () => onCompleted(done, assessment) },
+            );
+          } else onCompleted(done, assessment);
+        },
+      },
     );
   };
 
@@ -163,11 +206,49 @@ function CompleteVisitForm({
         </DialogDescription>
       </DialogHeader>
 
+      {assessing && (
+        <section className="visit-assessment mt-4" aria-label="Assessment">
+          <h4 className="form-section-title">Assessment</h4>
+          <div className="form-grid">
+            <label>
+              Concern
+              <SelectInput
+                required
+                value={chosenConcern}
+                onChange={(e) => setConcern(e.target.value)}
+                data-error-required="Record the patient’s concern to complete the consultation"
+              >
+                <option value="">Select the concern</option>
+                {concernNames.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </SelectInput>
+            </label>
+            <label>
+              Recommended plan
+              <SelectInput value={planId} onChange={(e) => setPlanId(e.target.value)}>
+                <option value="">No package for now</option>
+                {activePlans.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </SelectInput>
+            </label>
+          </div>
+          <p className="field-note mt-2">
+            {planId
+              ? "After completing, you can create the package from this plan — adjust grafts, prices and dates before saving."
+              : "Optional — the package can also be created later from the patient’s record."}
+          </p>
+        </section>
+      )}
+
       <div className="complete-visit mt-4">
         <label className="field-search complete-visit-search">
           <Search />
           <input
-            autoFocus
+            autoFocus={!assessing}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => {
@@ -350,8 +431,8 @@ function CompleteVisitForm({
         <Button type="button" variant="outline" onClick={onCancel} disabled={complete.isPending}>
           Cancel
         </Button>
-        <Button type="submit" disabled={complete.isPending}>
-          {complete.isPending ? (
+        <Button type="submit" disabled={complete.isPending || updatePatient.isPending}>
+          {complete.isPending || updatePatient.isPending ? (
             <LoaderCircle className="animate-spin" />
           ) : rows.length ? (
             <ClipboardList />

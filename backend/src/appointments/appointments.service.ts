@@ -9,6 +9,7 @@ import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { CrudService } from '../common/crud.service';
 import { NewEntity } from '../common/entity';
 import { addDays, clinicDate } from '../common/dates';
+import { TreatmentCatalogService } from '../catalog/catalog.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { INVOICE_CHANGED, type Invoice } from '../invoices/invoice.entity';
 import { PatientsService } from '../patients/patients.service';
@@ -39,6 +40,7 @@ export class AppointmentsService
     events: EventEmitter2,
     private readonly patients: PatientsService,
     private readonly inventory: InventoryService,
+    private readonly catalog: TreatmentCatalogService,
   ) {
     super(events, 'appointment', 'APT-', seedAppointments());
   }
@@ -132,6 +134,7 @@ export class AppointmentsService
         'Send either patientId or newPatient, not both',
       );
     }
+    this.assertNotSurgery(dto.type, dto.days);
     // Registering first means a duplicate phone number fails before anything is booked.
     const patientId = newPatient
       ? this.patients.create(newPatient).id
@@ -148,6 +151,22 @@ export class AppointmentsService
     // A visit for a treatment in the patient's plan gets linked to that step (PackagesService).
     this.events.emit(APPOINTMENT_BOOKED, created);
     return this.findOne(created.id);
+  }
+
+  /**
+   * Surgery is only booked from a treatment package (Pending bookings / the package's
+   * "Schedule surgery"), never as a normal appointment.
+   */
+  private assertNotSurgery(type: string, days?: number) {
+    const name = type.trim().toLowerCase();
+    const surgical = this.catalog
+      .findAll()
+      .some((t) => t.surgical && t.name.toLowerCase() === name);
+    if (surgical || days !== undefined) {
+      throw new BadRequestException(
+        'Surgery is scheduled from the patient’s treatment package. Create a package with the surgery first, then book it from Pending bookings.',
+      );
+    }
   }
 
   /** Link (or with null, unlink) an appointment to a package step — PackagesService only. */
@@ -172,6 +191,13 @@ export class AppointmentsService
       throw new BadRequestException(
         'Send either patientId or newPatient, not both',
       );
+    }
+    if (
+      !current.packageId &&
+      dto.type !== undefined &&
+      dto.type !== current.type
+    ) {
+      this.assertNotSurgery(dto.type);
     }
     const changingPatient =
       !!newPatient ||

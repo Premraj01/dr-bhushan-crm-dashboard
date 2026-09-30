@@ -1,5 +1,13 @@
 import { useState } from "react";
-import { Camera, FileSignature, HeartPulse, IndianRupee, Pill, ScanFace } from "lucide-react";
+import {
+  CalendarCheck2,
+  Camera,
+  FileSignature,
+  HeartPulse,
+  IndianRupee,
+  Pill,
+  ScanFace,
+} from "lucide-react";
 import { Banner } from "@/components/crm-ui";
 import { usePatient } from "@/components/patients/patients-api";
 import {
@@ -19,10 +27,12 @@ import { MedicalForm } from "./medical-form";
 import { PhotoVault } from "./photo-vault";
 import { PrescriptionsTab } from "./prescriptions-tab";
 import { SafetyStrip } from "./safety-strip";
+import { VisitsTab } from "./visits-tab";
+import { useCompletedVisits } from "@/components/appointments/appointments-api";
 import { errorText } from "@/lib/api";
 
 export type HistoryTab =
-  "medical" | "hair" | "prescriptions" | "photos" | "documents" | "financial";
+  "medical" | "hair" | "visits" | "prescriptions" | "photos" | "documents" | "financial";
 
 /** The patient's full record: medical baseline, hair assessment, photos, consents and billing. */
 export function PatientHistoryDialog({
@@ -42,6 +52,7 @@ export function PatientHistoryDialog({
   const history = useHistory(patientId);
   const documents = useDocuments(patientId);
   const photos = usePhotos(patientId);
+  const visits = useCompletedVisits(patientId);
   const [tab, setTab] = useState<HistoryTab>("medical");
   const [message, setMessage] = useState<string | null>(null);
   const [lastId, setLastId] = useState(patientId);
@@ -95,6 +106,10 @@ export function PatientHistoryDialog({
                 <ScanFace />
                 Hair & treatment
               </TabsTrigger>
+              <TabsTrigger value="visits">
+                <CalendarCheck2 />
+                Visits{visits.data?.length ? ` (${visits.data.length})` : ""}
+              </TabsTrigger>
               <TabsTrigger value="prescriptions">
                 <Pill />
                 Prescriptions
@@ -140,6 +155,9 @@ export function PatientHistoryDialog({
                   onSaved={() => notify("Hair assessment saved.")}
                 />
               )}
+            </TabsContent>
+            <TabsContent value="visits">
+              <VisitsTab patientId={patientId} />
             </TabsContent>
             <TabsContent value="prescriptions">
               <PrescriptionsTab

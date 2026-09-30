@@ -186,6 +186,32 @@ export function useAppointments(params: { month: string } | { date: string }) {
   return query;
 }
 
+/** A patient's completed visits, newest first; refreshes live with the calendar. */
+export function useCompletedVisits(patientId: string | null) {
+  const queryClient = useQueryClient();
+  const query = useQuery({
+    queryKey: ["appointments", "completed", patientId],
+    queryFn: () =>
+      api<Appointment[]>(
+        `/appointments?${new URLSearchParams({ patientId: patientId!, status: "Completed" })}`,
+      ),
+    enabled: patientId !== null,
+    select: (visits) => [...visits].sort((a, b) => b.startsAt.localeCompare(a.startsAt)),
+    retry: 1,
+  });
+  const live = getToken() !== null;
+  useEffect(() => {
+    if (!live || patientId === null) return;
+    const refresh = () =>
+      void queryClient.invalidateQueries({ queryKey: ["appointments", "completed", patientId] });
+    const socket = getSocket();
+    const events = ["appointment.created", "appointment.updated", "appointment.deleted"];
+    events.forEach((e) => socket.on(e, refresh));
+    return () => events.forEach((e) => socket.off(e, refresh));
+  }, [queryClient, live, patientId]);
+  return query;
+}
+
 /** A patient's next booked visit (Scheduled or Rescheduled, today or later). */
 export type UpcomingVisit = Pick<
   Appointment,

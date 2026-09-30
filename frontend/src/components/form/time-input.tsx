@@ -105,7 +105,7 @@ export function TimeInput({
       </PopoverAnchor>
       <PopoverContent
         align="start"
-        className="picker-popover time-picker p-0"
+        className="field-popover time-picker p-0"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <div className="time-picker-head">

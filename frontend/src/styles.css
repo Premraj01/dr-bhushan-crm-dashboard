@@ -914,7 +914,7 @@ input[data-invalid]:focus,select[data-invalid]:focus,textarea[data-invalid]:focu
 .field-icon{position:absolute;top:50%;right:11px;transform:translateY(-50%);color:var(--muted-foreground);pointer-events:none}
 
 /* ---------- Picker popovers (calendar + time) ---------- */
-.picker-popover{width:min-content;z-index:60;overflow:hidden;border:1px solid var(--border);border-radius:8px;background:var(--popover);box-shadow:var(--shadow-panel),0 12px 32px oklch(.2 .03 195 / .14);font-family:var(--font-body)}
+.field-popover{width:min-content;z-index:60;overflow:hidden;border:1px solid var(--border);border-radius:8px;background:var(--popover);box-shadow:var(--shadow-panel),0 12px 32px oklch(.2 .03 195 / .14);font-family:var(--font-body)}
 .picker-footer{display:flex;justify-content:space-between;gap:8px;border-top:1px solid var(--border);padding:8px 10px}
 .picker-footer button{min-height:30px;border:0;border-radius:4px;background:transparent;padding:0 10px;color:var(--muted-foreground);font:600 11px var(--font-heading)}
 .picker-footer button:hover:not(:disabled){background:var(--secondary);color:var(--foreground)}
@@ -988,3 +988,7 @@ input.select-trigger[aria-expanded=true]{border-color:var(--ring)}
 .themed-calendar input.calendar-select:focus-visible{border-color:var(--ring);box-shadow:0 0 0 2px color-mix(in oklab,var(--ring) 15%,transparent)}
 .select-popover.calendar-select-popover{width:auto;min-width:120px}
 .themed-calendar .rdp-nav{pointer-events:none}.themed-calendar .rdp-nav button{pointer-events:auto}
+/* Consultation assessment in "Complete visit" */
+.visit-assessment{border:1px solid var(--border);border-radius:6px;background:var(--card);padding:12px 14px}
+.visit-assessment .form-section-title{margin:0 0 10px;color:var(--foreground);font:700 11px var(--font-heading);text-transform:uppercase;letter-spacing:.02em}
+input.select-trigger::selection,.time-field>input::selection{background:transparent}
